@@ -73,7 +73,7 @@ jobs:
         ./autogen.sh
         ./configure
         make
-        make install
+        sudo make install
       
 
     - name: Perform CodeQL Analysis
