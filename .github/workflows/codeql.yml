@@ -69,7 +69,7 @@ jobs:
     - name: Manual Build
       run: |
         echo "Building according to given instructions"
-        sudo apt-get -y install libgmp10 libgmp-dev libmpfr6 libmpfr-dev libxml2 libxml2-dev curl libcurl4 libcurl4-openssl-dev libicu-dev icu-devtools gettext doxygen
+        sudo apt-get -y install libgmp10 libgmp-dev libmpfr6 libmpfr-dev libxml2 libxml2-dev curl libcurl4 libcurl4-openssl-dev libicu-dev icu-devtools gettext doxygen intltool
         ./autogen.sh
         ./configure
         make
