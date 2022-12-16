@@ -69,6 +69,7 @@ jobs:
     - name: Manual Build
       run: |
         echo "Building according to given instructions"
+        apt get -y install libgmp libgmp-dev libmpfr libmpfr-dev libxml2 libxml2-dev curl libcurl libcurl-dev libicu libicu-dev
         ./autogen.sh
         ./configure
         make
