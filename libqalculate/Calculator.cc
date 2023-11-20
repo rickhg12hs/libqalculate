@@ -142,6 +142,24 @@ extern gmp_randstate_t randstate;
 Calculator::Calculator() {
 	b_ignore_locale = false;
 
+#ifdef _WIN32
+	size_t n = 0;
+	getenv_s(&n, NULL, 0, "LANG");
+	if(n == 0) {
+		ULONG nlang = 0;
+		DWORD n = 0;
+		if(GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &nlang, NULL, &n)) {
+			WCHAR wlocale[n];
+			if(GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &nlang, wlocale, &n)) {
+				string lang = utf8_encode(wlocale);
+				gsub("-", "_", lang);
+				if(lang.length() > 5) lang = lang.substr(0, 5);
+				if(!lang.empty()) _putenv_s("LANG", lang.c_str());
+			}
+		}
+	}
+#endif
+
 #ifdef ENABLE_NLS
 	bindtextdomain(GETTEXT_PACKAGE, getPackageLocaleDir().c_str());
 	bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
@@ -160,6 +178,8 @@ Calculator::Calculator() {
 	priv->temperature_calculation = TEMPERATURE_CALCULATION_HYBRID;
 	priv->matlab_matrices = true;
 	priv->persistent_plot = false;
+	priv->concise_uncertainty_input = false;
+	priv->fixed_denominator = 2;
 
 #ifdef HAVE_ICU
 	UErrorCode err = U_ZERO_ERROR;
@@ -169,15 +189,16 @@ Calculator::Calculator() {
 	srand(time(NULL));
 
 	exchange_rates_time[0] = 0;
-	exchange_rates_time[1] = (time_t) 462624L * (time_t) 3600;
+	exchange_rates_time[1] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_time[2] = 0;
-	priv->exchange_rates_time2[0] = (time_t) 462624L * (time_t) 3600;
+	priv->exchange_rates_time2[0] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_check_time[0] = 0;
-	exchange_rates_check_time[1] = (time_t) 462624L * (time_t) 3600;
+	exchange_rates_check_time[1] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_check_time[2] = 0;
-	priv->exchange_rates_check_time2[0] = (time_t) 462624L * (time_t) 3600;
+	priv->exchange_rates_check_time2[0] = (time_t) 470688L * (time_t) 3600;
 	b_exchange_rates_warning_enabled = true;
 	b_exchange_rates_used = 0;
+	priv->exchange_rates_url3 = 0;
 
 	i_aborted = 0;
 	b_controlled = false;
@@ -337,6 +358,7 @@ Calculator::Calculator() {
 	default_assumptions->setSign(ASSUMPTION_SIGN_UNKNOWN);
 
 	u_rad = NULL; u_gra = NULL; u_deg = NULL;
+	priv->custom_angle_unit = NULL;
 
 	b_save_called = false;
 
@@ -380,6 +402,23 @@ Calculator::Calculator(bool ignore_locale) {
 			saved_locale = NULL;
 		}
 	} else {
+#ifdef _WIN32
+		size_t n = 0;
+		getenv_s(&n, NULL, 0, "LANG");
+		if(n == 0) {
+			ULONG nlang = 0;
+			DWORD n = 0;
+			if(GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &nlang, NULL, &n)) {
+				WCHAR wlocale[n];
+				if(GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &nlang, wlocale, &n)) {
+					string lang = utf8_encode(wlocale);
+					gsub("-", "_", lang);
+					if(lang.length() > 5) lang = lang.substr(0, 5);
+					if(!lang.empty()) _putenv_s("LANG", lang.c_str());
+				}
+			}
+		}
+#endif
 #ifdef ENABLE_NLS
 		bindtextdomain(GETTEXT_PACKAGE, getPackageLocaleDir().c_str());
 		bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
@@ -399,6 +438,8 @@ Calculator::Calculator(bool ignore_locale) {
 	priv->temperature_calculation = TEMPERATURE_CALCULATION_HYBRID;
 	priv->matlab_matrices = true;
 	priv->persistent_plot = false;
+	priv->concise_uncertainty_input = false;
+	priv->fixed_denominator = 2;
 
 #ifdef HAVE_ICU
 	UErrorCode err = U_ZERO_ERROR;
@@ -408,15 +449,16 @@ Calculator::Calculator(bool ignore_locale) {
 	srand(time(NULL));
 
 	exchange_rates_time[0] = 0;
-	exchange_rates_time[1] = (time_t) 462624L * (time_t) 3600;
+	exchange_rates_time[1] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_time[2] = 0;
-	priv->exchange_rates_time2[0] = (time_t) 462624L * (time_t) 3600;
+	priv->exchange_rates_time2[0] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_check_time[0] = 0;
-	exchange_rates_check_time[1] = (time_t) 462624L * (time_t) 3600;
+	exchange_rates_check_time[1] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_check_time[2] = 0;
-	priv->exchange_rates_check_time2[0] = (time_t) 462624L * (time_t) 3600;
+	priv->exchange_rates_check_time2[0] = (time_t) 470688L * (time_t) 3600;
 	b_exchange_rates_warning_enabled = true;
 	b_exchange_rates_used = 0;
+	priv->exchange_rates_url3 = 0;
 
 	i_aborted = 0;
 	b_controlled = false;
@@ -570,6 +612,7 @@ Calculator::Calculator(bool ignore_locale) {
 	default_assumptions->setSign(ASSUMPTION_SIGN_UNKNOWN);
 
 	u_rad = NULL; u_gra = NULL; u_deg = NULL;
+	priv->custom_angle_unit = NULL;
 
 	b_save_called = false;
 
@@ -599,11 +642,12 @@ Calculator::~Calculator() {
 	clearRPNStack();
 	for(unordered_map<Unit*, MathStructure*>::iterator it = priv->composite_unit_base.begin(); it != priv->composite_unit_base.end(); ++it) it->second->unref();
 	for(unordered_map<size_t, MathStructure*>::iterator it = priv->id_structs.begin(); it != priv->id_structs.end(); ++it) it->second->unref();
-	for(size_t i = 0; i < functions.size(); i++) delete functions[i];
-	for(size_t i = 0; i < variables.size(); i++) delete variables[i];
-	for(size_t i = 0; i < units.size(); i++) delete units[i];
+#define REMOVE_EXPRESSION_ITEM(o) o->setRegistered(false); o->destroy();
+	for(size_t i = 0; i < functions.size(); i++) {REMOVE_EXPRESSION_ITEM(functions[i])}
+	for(size_t i = 0; i < variables.size(); i++) {REMOVE_EXPRESSION_ITEM(variables[i])}
+	for(size_t i = 0; i < units.size(); i++) {REMOVE_EXPRESSION_ITEM(units[i])}
 	for(size_t i = 0; i < prefixes.size(); i++) delete prefixes[i];
-	if(v_C) delete v_C;
+	if(v_C) {REMOVE_EXPRESSION_ITEM(v_C)}
 	if(decimal_null_prefix) delete decimal_null_prefix;
 	if(binary_null_prefix) delete binary_null_prefix;
 	if(default_assumptions) delete default_assumptions;
@@ -1070,8 +1114,8 @@ DecimalPrefix *Calculator::getOptimalDecimalPrefix(int exp10, int exp, bool all_
 	DecimalPrefix *p = NULL, *p_prev = NULL;
 	int exp10_1, exp10_2;
 	while((exp < 0 && i >= 0) || (exp >= 0 && i < (int) decimal_prefixes.size())) {
-		if(all_prefixes || decimal_prefixes[i]->exponent() % 3 == 0) {
-			p = decimal_prefixes[i];
+		p = decimal_prefixes[i];
+		if(all_prefixes || (p->exponent() % 3 == 0 && p->exponent() >= -24 && p->exponent() <= 24)) {
 			if(p_prev && (p_prev->exponent() >= 0) != (p->exponent() >= 0) && p_prev->exponent() != 0) {
 				if(exp < 0) {
 					i++;
@@ -1084,7 +1128,7 @@ DecimalPrefix *Calculator::getOptimalDecimalPrefix(int exp10, int exp, bool all_
 				if(p == decimal_null_prefix) return NULL;
 				return p;
 			} else if(p->exponent(exp) > exp10) {
-				if(i == 0) {
+				if((exp < 0 && (i == (int) decimal_prefixes.size() - 1 || (!all_prefixes && p->exponent() == 24))) || (exp >= 0 && (i == 0 || (!all_prefixes && p->exponent() == -24)))) {
 					if(p == decimal_null_prefix) return NULL;
 					return p;
 				}
@@ -1123,8 +1167,8 @@ DecimalPrefix *Calculator::getOptimalDecimalPrefix(const Number &exp10, const Nu
 	DecimalPrefix *p = NULL, *p_prev = NULL;
 	Number exp10_1, exp10_2;
 	while((exp.isNegative() && i >= 0) || (!exp.isNegative() && i < (int) decimal_prefixes.size())) {
-		if(all_prefixes || decimal_prefixes[i]->exponent() % 3 == 0) {
-			p = decimal_prefixes[i];
+		p = decimal_prefixes[i];
+		if(all_prefixes || (p->exponent() % 3 == 0 && p->exponent() >= -24 && p->exponent() <= 24)) {
 			if(p_prev && (p_prev->exponent() >= 0) != (p->exponent() >= 0) && p_prev->exponent() != 0) {
 				if(exp.isNegative()) {
 					i++;
@@ -1138,7 +1182,7 @@ DecimalPrefix *Calculator::getOptimalDecimalPrefix(const Number &exp10, const Nu
 				if(p == decimal_null_prefix) return NULL;
 				return p;
 			} else if(c == COMPARISON_RESULT_GREATER) {
-				if(i == 0) {
+				if((exp.isNegative() && (i == (int) decimal_prefixes.size() - 1 || (!all_prefixes && p->exponent() == 24))) || (!exp.isNegative() && (i == 0 || (!all_prefixes && p->exponent() == -24)))) {
 					if(p == decimal_null_prefix) return NULL;
 					return p;
 				}
@@ -1228,6 +1272,10 @@ BinaryPrefix *Calculator::getOptimalBinaryPrefix(int exp2, int exp) const {
 			if(p == binary_null_prefix) return NULL;
 			return p;
 		} else if(p->exponent(exp) > exp2) {
+			if((exp >= 0 && i == 0) || (exp < 0 && i == (int) binary_prefixes.size())) {
+				if(p == binary_null_prefix) return NULL;
+				return p;
+			}
 			exp2_1 = exp2;
 			if(p_prev) {
 				exp2_1 -= p_prev->exponent(exp);
@@ -1268,6 +1316,10 @@ BinaryPrefix *Calculator::getOptimalBinaryPrefix(const Number &exp2, const Numbe
 			if(p == binary_null_prefix) return NULL;
 			return p;
 		} else if(c == COMPARISON_RESULT_GREATER) {
+			if((exp.isNegative() && i == (int) binary_prefixes.size() - 1) || (!exp.isNegative() && i == 0)) {
+				if(p == binary_null_prefix) return NULL;
+				return p;
+			}
 			exp2_1 = exp2;
 			if(p_prev) {
 				exp2_1 -= p_prev->exponent(exp);
@@ -1293,9 +1345,21 @@ BinaryPrefix *Calculator::getOptimalBinaryPrefix(const Number &exp2, const Numbe
 }
 Prefix *Calculator::addPrefix(Prefix *p) {
 	if(p->type() == PREFIX_DECIMAL) {
-		decimal_prefixes.push_back((DecimalPrefix*) p);
+		if(decimal_prefixes.empty() || ((DecimalPrefix*) p)->exponent() > decimal_prefixes[decimal_prefixes.size() - 1]->exponent()) {
+			decimal_prefixes.push_back((DecimalPrefix*) p);
+		} else {
+			size_t i = decimal_prefixes.size() - 1;
+			while(i > 0 && ((DecimalPrefix*) p)->exponent() < decimal_prefixes[i - 1]->exponent()) i--;
+			decimal_prefixes.insert(decimal_prefixes.begin() + i, (DecimalPrefix*) p);
+		}
 	} else if(p->type() == PREFIX_BINARY) {
-		binary_prefixes.push_back((BinaryPrefix*) p);
+		if(binary_prefixes.empty() || ((BinaryPrefix*) p)->exponent() > binary_prefixes[binary_prefixes.size() - 1]->exponent()) {
+			binary_prefixes.push_back((BinaryPrefix*) p);
+		} else {
+			size_t i = binary_prefixes.size() - 1;
+			while(i > 0 && ((BinaryPrefix*) p)->exponent() < binary_prefixes[i - 1]->exponent()) i--;
+			binary_prefixes.insert(binary_prefixes.begin() + i, (BinaryPrefix*) p);
+		}
 	}
 	prefixes.push_back(p);
 	prefixNameChanged(p, true);
@@ -1341,11 +1405,11 @@ void Calculator::prefixNameChanged(Prefix *p, bool new_item) {
 		}
 	}
 }
-#define PRECISION_TO_BITS(p) (((p) * 3.3219281) + 100)
-#define BITS_TO_PRECISION(p) (::ceil(((p) - 100) / 3.3219281))
+#define PRECISION_TO_BITS(p) ((((double) p) * 3.3219281) + 100)
+#define BITS_TO_PRECISION(p) (::ceil((((double) p) - 100) / 3.3219281))
 void Calculator::setPrecision(int precision) {
 	if(precision <= 0) precision = DEFAULT_PRECISION;
-	if(PRECISION_TO_BITS(precision) > MPFR_PREC_MAX - 1000L) {
+	if(PRECISION_TO_BITS(precision) > (double) MPFR_PREC_MAX - 1000L) {
 		if(BITS_TO_PRECISION(MPFR_PREC_MAX) > INT_MAX) i_precision = INT_MAX;
 		else i_precision = (int) BITS_TO_PRECISION(MPFR_PREC_MAX - 1000L);
 		mpfr_set_default_prec(MPFR_PREC_MAX - 1000L);
@@ -1374,6 +1438,23 @@ void Calculator::endTemporaryEnableIntervalArithmetic() {
 
 bool Calculator::usesMatlabStyleMatrices() const {return priv->matlab_matrices;}
 void Calculator::useMatlabStyleMatrices(bool use_matlab_style_matrices) {priv->matlab_matrices = use_matlab_style_matrices;}
+
+bool Calculator::conciseUncertaintyInputEnabled() const {return priv->concise_uncertainty_input;}
+void Calculator::setConciseUncertaintyInputEnabled(bool enable_concise_uncertainty_input) {priv->concise_uncertainty_input = enable_concise_uncertainty_input;}
+
+long int Calculator::fixedDenominator() const {return priv->fixed_denominator;}
+void Calculator::setFixedDenominator(long int fixed_denominator) {
+	if(fixed_denominator > 1) priv->fixed_denominator = fixed_denominator;
+}
+
+void Calculator::setCustomAngleUnit(Unit *u) {
+	if(u) u->ref();
+	if(priv->custom_angle_unit) priv->custom_angle_unit->unref();
+	priv->custom_angle_unit = u;
+}
+Unit *Calculator::customAngleUnit() {
+	return priv->custom_angle_unit;
+}
 
 void Calculator::setCustomInputBase(Number nr) {
 	priv->custom_input_base = nr;
@@ -1529,8 +1610,10 @@ void Calculator::addBuiltinVariables() {
 	v_yesterday = (KnownVariable*) addVariable(new YesterdayVariable());
 	v_tomorrow = (KnownVariable*) addVariable(new TomorrowVariable());
 	v_now = (KnownVariable*) addVariable(new NowVariable());
-#if defined __linux__ || defined _WIN32
+#ifndef DISABLE_INSECURE
+#if 	defined __linux__ || defined _WIN32
 	addVariable(new UptimeVariable());
+#	endif
 #endif
 
 }
@@ -1572,6 +1655,7 @@ void Calculator::addBuiltinFunctions() {
 	addFunction(new NormFunction());
 	priv->f_vertcat = addFunction(new VertCatFunction());
 	priv->f_horzcat = addFunction(new HorzCatFunction());
+	addFunction(new KroneckerProductFunction());
 
 	f_factorial = addFunction(new FactorialFunction());
 	f_factorial2 = addFunction(new DoubleFactorialFunction());
@@ -1607,6 +1691,7 @@ void Calculator::addBuiltinFunctions() {
 	f_frac = addFunction(new FracFunction());
 	f_rem = addFunction(new RemFunction());
 	f_mod = addFunction(new ModFunction());
+	addFunction(new PowerModFunction());
 	addFunction(new BernoulliFunction());
 	addFunction(new TotientFunction());
 	priv->f_parallel = addFunction(new ParallelFunction());
@@ -1758,7 +1843,9 @@ void Calculator::addBuiltinFunctions() {
 	f_register = addFunction(new RegisterFunction());
 	f_stack = addFunction(new StackFunction());
 
+#ifndef DISABLE_INSECURE
 	addFunction(new CommandFunction());
+#endif
 
 	f_diff = addFunction(new DeriveFunction());
 	f_integrate = addFunction(new IntegrateFunction());
@@ -1805,11 +1892,11 @@ void Calculator::addBuiltinFunctions() {
 }
 void Calculator::addBuiltinUnits() {
 	u_euro = addUnit(new Unit(_("Currency"), "EUR", "euros", "euro", "European Euros", false, true, true));
-	u_btc = addUnit(new AliasUnit(_("Currency"), "BTC", "bitcoins", "bitcoin", "Bitcoins", u_euro, "19661.74", 1, "", false, true, true));
+	u_btc = addUnit(new AliasUnit(_("Currency"), "BTC", "bitcoins", "bitcoin", "Bitcoins", u_euro, "26127.56", 1, "", false, true, true));
 	u_btc->setApproximate();
 	u_btc->setPrecision(-2);
 	u_btc->setChanged(false);
-	priv->u_byn = addUnit(new AliasUnit(_("Currency"), "BYN", "", "", "Belarusian Ruble", u_euro, "1/2.45705", 1, "", false, true, true));
+	priv->u_byn = addUnit(new AliasUnit(_("Currency"), "BYN", "", "", "Belarusian Ruble", u_euro, "1/2.68918", 1, "", false, true, true));
 	priv->u_byn->setHidden(true);
 	priv->u_byn->setApproximate();
 	priv->u_byn->setPrecision(-2);
@@ -2258,20 +2345,20 @@ void Calculator::expressionItemDeleted(ExpressionItem *item) {
 			for(size_t i = 0; i < variables.size(); i++) {
 				if(!variables[i]->isLocal() && !variables[i]->isActive() && variables[i]->hasName(item->getName(i2).name, item->getName(i2).case_sensitive)) {
 					bool b = true;
-					for(size_t i = 1; i <= variables[i]->countNames(); i++) {
-						if(getActiveVariable(variables[i]->getName(i).name, !variables[i]->getName(i).completion_only) || getActiveUnit(variables[i]->getName(i).name, !variables[i]->getName(i).completion_only)) {
+					for(size_t i3 = 1; i3 <= variables[i]->countNames(); i3++) {
+						if(getActiveVariable(variables[i]->getName(i3).name, !variables[i]->getName(i3).completion_only) || getActiveUnit(variables[i]->getName(i3).name, !variables[i]->getName(i3).completion_only)) {
 							b = false;
 							break;
 						}
 					}
-					if(b) units[i]->setActive(true);
+					if(b) variables[i]->setActive(true);
 				}
 			}
 			for(size_t i = 0; i < units.size(); i++) {
 				if(!units[i]->isLocal() && !units[i]->isActive() && units[i]->hasName(item->getName(i2).name, item->getName(i2).case_sensitive)) {
 					bool b = true;
-					for(size_t i = 1; i <= units[i]->countNames(); i++) {
-						if(getActiveVariable(units[i]->getName(i).name, !units[i]->getName(i).completion_only) || getActiveUnit(units[i]->getName(i).name, !units[i]->getName(i).completion_only)) {
+					for(size_t i3 = 1; i3 <= units[i]->countNames(); i3++) {
+						if(getActiveVariable(units[i]->getName(i3).name, !units[i]->getName(i3).completion_only) || getActiveUnit(units[i]->getName(i3).name, !units[i]->getName(i3).completion_only)) {
 							b = false;
 							break;
 						}
@@ -2283,8 +2370,8 @@ void Calculator::expressionItemDeleted(ExpressionItem *item) {
 			for(size_t i = 0; i < functions.size(); i++) {
 				if(!functions[i]->isLocal() && !functions[i]->isActive() && functions[i]->hasName(item->getName(i2).name, item->getName(i2).case_sensitive)) {
 					bool b = true;
-					for(size_t i = 1; i <= functions[i]->countNames(); i++) {
-						if(getActiveFunction(functions[i]->getName(i).name, !functions[i]->getName(i).completion_only)) {
+					for(size_t i3 = 1; i3 <= functions[i]->countNames(); i3++) {
+						if(getActiveFunction(functions[i]->getName(i3).name, !functions[i]->getName(i3).completion_only)) {
 							b = false;
 							break;
 						}
@@ -2589,6 +2676,7 @@ MathFunction* Calculator::getFunctionById(int id) const {
 		case FUNCTION_ID_CONCATENATE: {return f_concatenate;}
 		case FUNCTION_ID_SECANT_METHOD: {return priv->f_secant;}
 		case FUNCTION_ID_NEWTON_RAPHSON: {return priv->f_newton;}
+		case FUNCTION_ID_RAND: {return f_rand;}
 	}
 	unordered_map<int, MathFunction*>::iterator it = priv->id_functions.find(id);
 	if(it == priv->id_functions.end()) return NULL;

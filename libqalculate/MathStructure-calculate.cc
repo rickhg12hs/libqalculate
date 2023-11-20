@@ -212,7 +212,7 @@ int MathStructure::merge_addition(MathStructure &mstruct, const EvaluationOption
 					bool b2 = mstruct.isMatrix();
 					if(!b1 && !representsNonMatrix()) return -1;
 					if(!b2 && !mstruct.representsNonMatrix()) return -1;
-					if(b2 && mstruct.columns() == 1 && (!b1 || SIZE == mstruct.size())) {
+					if(b2 && mstruct.columns() == 1 && ((!b1 && SIZE > 0) || (b1 && SIZE == mstruct.size()))) {
 						if(!b1) {
 							// row vector + column vector = matrix
 							transform(STRUCT_VECTOR);
@@ -232,7 +232,7 @@ int MathStructure::merge_addition(MathStructure &mstruct, const EvaluationOption
 							}
 						}
 						return 1;
-					} else if(b1 && columns() == 1 && (!b2 || SIZE == mstruct.size())) {
+					} else if(b1 && columns() == 1 && ((!b2 && mstruct.size() > 0) || (b2 && SIZE == mstruct.size()))) {
 						if(!b2) {
 							for(size_t i = 0; i < SIZE; i++) {
 								for(size_t i2 = 1; i2 < mstruct.size(); i2++) {
@@ -423,7 +423,7 @@ int MathStructure::merge_addition(MathStructure &mstruct, const EvaluationOption
 								} else if(mstruct.size() == SIZE - 2 && CHILD(0).isMinusOne()) {
 									b = true;
 									for(size_t i = 0; i < mstruct.size(); i++) {
-										if(!mstruct[i].equals(CHILD(i2 - 1 >= i ? i + 1 : i + 2))) {b = false; break;}
+										if(!mstruct[i].equals(CHILD(i2 > i + 1 ? i + 1 : i + 2))) {b = false; break;}
 									}
 								}
 								if(b) {
@@ -488,7 +488,7 @@ int MathStructure::merge_addition(MathStructure &mstruct, const EvaluationOption
 									} else if(mstruct.size() == SIZE - 2 && CHILD(0).isMinusOne()) {
 										b = true;
 										for(size_t i = 1; i < mstruct.size(); i++) {
-											if(!mstruct[i].equals(CHILD(i2 - 1 >= i ? i + 1 : i + 2))) {b = false; break;}
+											if(!mstruct[i].equals(CHILD(i2 > i + 1 ? i + 1 : i + 2))) {b = false; break;}
 										}
 									}
 									if(b) {
@@ -520,11 +520,12 @@ int MathStructure::merge_addition(MathStructure &mstruct, const EvaluationOption
 								if(equals(mstruct) && !FUNCTION_PROTECTED(eo, FUNCTION_ID_ASIN) && !FUNCTION_PROTECTED(eo, FUNCTION_ID_ACOS)) {
 									// asin(x)+acos(x)=pi/2
 									delChild(i2 + 1, true);
-									switch(eo.parse_options.angle_unit) {
-										case ANGLE_UNIT_DEGREES: {calculateMultiply(Number(90, 1, 0), eo); break;}
-										case ANGLE_UNIT_GRADIANS: {calculateMultiply(Number(100, 1, 0), eo); break;}
-										case ANGLE_UNIT_RADIANS: {calculateMultiply(CALCULATOR->getVariableById(VARIABLE_ID_PI), eo); calculateMultiply(nr_half, eo); break;}
-										default: {calculateMultiply(CALCULATOR->getVariableById(VARIABLE_ID_PI), eo); calculateMultiply(nr_half, eo); if(CALCULATOR->getRadUnit()) {calculateMultiply(CALCULATOR->getRadUnit(), eo);} break;}
+									if(DEFAULT_RADIANS(eo.parse_options.angle_unit)) {
+										calculateMultiply(CALCULATOR->getVariableById(VARIABLE_ID_PI), eo);
+										calculateMultiply(nr_half, eo);
+										if(NO_DEFAULT_ANGLE_UNIT(eo.parse_options.angle_unit)) calculateMultiply(CALCULATOR->getRadUnit(), eo);
+									} else {
+										calculateMultiply(angle_units_in_turn(eo, 1, 4), eo);
 									}
 									MERGE_APPROX_AND_PREC(mstruct)
 									return 1;
@@ -573,7 +574,7 @@ int MathStructure::merge_addition(MathStructure &mstruct, const EvaluationOption
 									} else if(mstruct.size() - 2 == SIZE && mstruct[0].isMinusOne()) {
 										b = true;
 										for(size_t i = 0; i < SIZE; i++) {
-											if(!CHILD(i).equals(mstruct[i2 - 1 >= i ? i + 1 : i + 2])) {b = false; break;}
+											if(!CHILD(i).equals(mstruct[i2 > i + 1 ? i + 1 : i + 2])) {b = false; break;}
 										}
 									}
 									if(b) {
@@ -617,7 +618,7 @@ int MathStructure::merge_addition(MathStructure &mstruct, const EvaluationOption
 										} else if(mstruct.size() - 2 == SIZE && mstruct[0].isMinusOne()) {
 											b = true;
 											for(size_t i = 1; i < SIZE; i++) {
-												if(!CHILD(i).equals(mstruct[i2 - 1 >= i ? i + 1 : i + 2])) {b = false; break;}
+												if(!CHILD(i).equals(mstruct[i2 > i + 1 ? i + 1 : i + 2])) {b = false; break;}
 											}
 										}
 										if(b) {
@@ -947,12 +948,7 @@ int MathStructure::merge_addition(MathStructure &mstruct, const EvaluationOption
 				}
 			} else if(mstruct.isFunction() && ((o_function->id() == FUNCTION_ID_ASIN && mstruct.function()->id() == FUNCTION_ID_ACOS) || (o_function->id() == FUNCTION_ID_ACOS && mstruct.function()->id() == FUNCTION_ID_ASIN)) && !FUNCTION_PROTECTED(eo, FUNCTION_ID_ACOS) && !FUNCTION_PROTECTED(eo, FUNCTION_ID_ASIN) && SIZE == 1 && mstruct.size() == 1 && CHILD(0) == mstruct[0]) {
 				// asin(x)+acos(x)=pi/2
-				switch(eo.parse_options.angle_unit) {
-					case ANGLE_UNIT_DEGREES: {set(90, 1, 0, true); break;}
-					case ANGLE_UNIT_GRADIANS: {set(100, 1, 0, true); break;}
-					case ANGLE_UNIT_RADIANS: {set(CALCULATOR->getVariableById(VARIABLE_ID_PI), true); multiply(nr_half); calculatesub(eo, eo, true); break;}
-					default: {set(CALCULATOR->getVariableById(VARIABLE_ID_PI), true); multiply(nr_half); if(CALCULATOR->getRadUnit()) {multiply(CALCULATOR->getRadUnit(), true);} calculatesub(eo, eo, true); break;}
-				}
+				set_fraction_of_turn(*this, eo, 1, 4);
 				MERGE_APPROX_AND_PREC(mstruct)
 				return 1;
 			} else if(mstruct.isFunction() && ((o_function->id() == FUNCTION_ID_SINH && mstruct.function()->id() == FUNCTION_ID_COSH) || (o_function->id() == FUNCTION_ID_COSH && mstruct.function()->id() == FUNCTION_ID_SINH)) && !FUNCTION_PROTECTED(eo, FUNCTION_ID_COSH) && !FUNCTION_PROTECTED(eo, FUNCTION_ID_SINH) && SIZE == 1 && mstruct.size() == 1 && CHILD(0) == mstruct[0]) {
@@ -1484,12 +1480,10 @@ int MathStructure::merge_multiplication(MathStructure &mstruct, const Evaluation
 						transform(STRUCT_MULTIPLICATION);
 						PREPEND_REF(&mstruct);
 					}
-					size_t i_erased = 0;
 					if(b_pow) {
 						reduce(CHILD(0)[i_reducable][0], CHILD(1)[0], nr, eo);
 						if(nr == CHILD(0)[i_reducable][1].number()) {
 							CHILD(0).delChild(i_reducable + 1);
-							i_erased++;
 						} else {
 							CHILD(0)[i_reducable][1].number() -= nr;
 							if(CHILD(0)[i_reducable][1].number().isOne()) {
@@ -2069,6 +2063,7 @@ int MathStructure::merge_multiplication(MathStructure &mstruct, const Evaluation
 						return 1;
 					} else {
 						for(size_t i = 0; i < SIZE; i++) {
+							if(CALCULATOR->aborted()) break;
 							int ret = CHILD(i).merge_multiplication(mstruct, eo, NULL, 0, 0, false, false);
 							if(ret == 0) {
 								ret = mstruct.merge_multiplication(CHILD(i), eo, NULL, 0, 0, true, false);
@@ -3264,7 +3259,9 @@ int MathStructure::merge_power(MathStructure &mstruct, const EvaluationOptions &
 		if(o_number.isRational() && !o_number.isInteger() && !o_number.isZero() && ((o_number.isNegative() && o_number.isGreaterThan(nr_minus_one) && mstruct.number().isInteger()) || (o_number.isPositive() && o_number.isLessThan(nr_one)))) {
 			mstruct.number().negate();
 			o_number.recip();
-			return 0;
+			mstruct.ref();
+			raise_nocopy(&mstruct);
+			return 1;
 		}
 		return -1;
 	}
@@ -3278,7 +3275,7 @@ int MathStructure::merge_power(MathStructure &mstruct, const EvaluationOptions &
 		MERGE_APPROX_AND_PREC(mstruct)
 		return 1;
 	}
-	if(m_type == STRUCT_NUMBER && o_number.isInfinite(false)) {
+	if(m_type == STRUCT_NUMBER && o_number.isInfinite(false) && !CALCULATOR->aborted()) {
 		if(mstruct.representsNegative(false)) {
 			// infinity^(-a)=0
 			o_number.clear();
@@ -3337,7 +3334,7 @@ int MathStructure::merge_power(MathStructure &mstruct, const EvaluationOptions &
 				return 1;
 			}
 		}
-	} else if(mstruct.isNumber() && mstruct.number().isInfinite(false)) {
+	} else if(mstruct.isNumber() && mstruct.number().isInfinite(false) && !CALCULATOR->aborted()) {
 		// test calculation of base when exponent is infinite
 		MathStructure mtest(*this);
 		CALCULATOR->beginTemporaryEnableIntervalArithmetic();
@@ -3994,7 +3991,7 @@ int MathStructure::merge_power(MathStructure &mstruct, const EvaluationOptions &
 					for(size_t i = 0; i < mstruct.size(); i++) {
 						if(i == 0) mthis.raise(mstruct[i]);
 						// exponent factor must be real and, if base is zero, positive
-						if(!mstruct[i].representsReal(true) || (isZero() && !mstruct[i].representsPositive(true))) continue;
+						if(!mstruct[i].representsReal() || (isZero() && !mstruct[i].representsPositive())) continue;
 						if(i > 0) mthis[1] = mstruct[i];
 						EvaluationOptions eo2 = eo;
 						eo2.split_squares = false;
@@ -5416,7 +5413,7 @@ bool MathStructure::calculatesub(const EvaluationOptions &eo, const EvaluationOp
 				if(CHILD(0).unit() == CALCULATOR->getUnitById(UNIT_ID_CELSIUS) && CALCULATOR->getUnitById(UNIT_ID_KELVIN)) CHILD(0).setUnit(CALCULATOR->getUnitById(UNIT_ID_KELVIN));
 				else if(CHILD(0).unit() == CALCULATOR->getUnitById(UNIT_ID_FAHRENHEIT) && CALCULATOR->getUnitById(UNIT_ID_RANKINE)) CHILD(0).setUnit(CALCULATOR->getUnitById(UNIT_ID_RANKINE));
 			}
-			if(CHILD(0).merge_power(CHILD(1), eo) >= 1) {
+			if(!CALCULATOR->aborted() && CHILD(0).merge_power(CHILD(1), eo) >= 1) {
 				b = true;
 				setToChild(1, false, mparent, index_this + 1);
 			}
@@ -5513,6 +5510,7 @@ bool MathStructure::calculatesub(const EvaluationOptions &eo, const EvaluationOp
 					bool b_matrix = !CHILD(i).representsNonMatrix();
 					if(i2 < i) {
 						for(; ; i2--) {
+							if(CALCULATOR->aborted()) break;
 							int r = CHILD(i2).merge_multiplication(CHILD(i), eo, this, i2, i);
 							if(r == 0) {
 								SWAP_CHILDREN(i2, i);
@@ -5535,6 +5533,7 @@ bool MathStructure::calculatesub(const EvaluationOptions &eo, const EvaluationOp
 					}
 					bool had_matrix = false;
 					for(i2 = i + 1; i2 < SIZE; i2++) {
+						if(CALCULATOR->aborted()) break;
 						if(had_matrix && !CHILD(i2).representsNonMatrix()) continue;
 						int r = CHILD(i).merge_multiplication(CHILD(i2), eo, this, i, i2);
 						if(r == 0) {
@@ -6614,6 +6613,7 @@ bool MathStructure::calculateRaiseExponent(const EvaluationOptions &eo, MathStru
 		CALCULATOR->error(true, "calculateRaiseExponent() error: %s. %s", format_and_print(*this).c_str(), _("This is a bug. Please report it."), NULL);
 		return false;
 	}
+	if(CALCULATOR->aborted()) return false;
 	if(CHILD(0).merge_power(CHILD(1), eo, this, 0, 1) >= 1) {
 		setToChild(1, false, mparent, index_this + 1);
 		return true;
@@ -6843,7 +6843,7 @@ bool MathStructure::calculateSubtract(const MathStructure &msub, const Evaluatio
 
 bool MathStructure::calculateFunctions(const EvaluationOptions &eo, bool recursive, bool do_unformat) {
 
-	if(m_type == STRUCT_FUNCTION && o_function != eo.protected_function && !b_protected) {
+	if(m_type == STRUCT_FUNCTION && o_function != eo.protected_function && !b_protected && !CALCULATOR->aborted()) {
 
 		if(function_value) {
 			// clear stored function value (presently not used)

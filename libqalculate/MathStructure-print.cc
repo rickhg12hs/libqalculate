@@ -126,6 +126,8 @@ void get_total_degree(const MathStructure &m, Number &deg, bool top = true) {
 	}
 }
 
+#define VARIABLE_IS_PERCENTAGE(x) (x->isKnown() && (x == CALCULATOR->getVariableById(VARIABLE_ID_PERCENT) || x == CALCULATOR->getVariableById(VARIABLE_ID_PERMILLE) || x == CALCULATOR->getVariableById(VARIABLE_ID_PERMYRIAD)))
+
 int sortCompare(const MathStructure &mstruct1, const MathStructure &mstruct2, const MathStructure &parent, const PrintOptions &po);
 int sortCompare(const MathStructure &mstruct1, const MathStructure &mstruct2, const MathStructure &parent, const PrintOptions &po) {
 	// returns -1 if mstruct1 should be placed before mstruct2, 1 if mstruct1 should be placed after mstruct2, and 0 if current order should be preserved
@@ -292,6 +294,7 @@ int sortCompare(const MathStructure &mstruct1, const MathStructure &mstruct2, co
 	if(mstruct1.type() != mstruct2.type()) {
 		if(mstruct1.isVariable() && mstruct2.isSymbolic()) {
 			if(parent.isMultiplication()) {
+				if(VARIABLE_IS_PERCENTAGE(mstruct1.variable())) return 1;
 				// place constant (known) factors first (before symbols)
 				if(mstruct1.variable()->isKnown()) return -1;
 			}
@@ -301,6 +304,7 @@ int sortCompare(const MathStructure &mstruct1, const MathStructure &mstruct2, co
 		}
 		if(mstruct2.isVariable() && mstruct1.isSymbolic()) {
 			if(parent.isMultiplication()) {
+				if(VARIABLE_IS_PERCENTAGE(mstruct2.variable())) return 1;
 				// place constant (known) factors first (before symbols)
 				if(mstruct2.variable()->isKnown()) return 1;
 			}
@@ -331,6 +335,8 @@ int sortCompare(const MathStructure &mstruct1, const MathStructure &mstruct2, co
 			// place unit factors last
 			if(mstruct2.isUnit()) return -1;
 			if(mstruct1.isUnit()) return 1;
+			if(mstruct2.isVariable() && VARIABLE_IS_PERCENTAGE(mstruct2.variable())) return -1;
+			if(mstruct1.isVariable() && VARIABLE_IS_PERCENTAGE(mstruct1.variable())) return 1;
 			if(mstruct2.isUnknown()) return -1;
 			if(mstruct1.isUnknown()) return 1;
 			if(mstruct1.isAddition() && !mstruct2.isAddition() && !mstruct1.containsUnknowns() && (mstruct2.isUnknown_exp() || (mstruct2.isMultiplication() && mstruct2.containsUnknowns()))) return -1;
@@ -444,6 +450,12 @@ int sortCompare(const MathStructure &mstruct1, const MathStructure &mstruct2, co
 			p2 = mstruct2.unit()->useWithPrefixesByDefault() || (po.use_prefixes_for_currencies && mstruct2.unit()->isCurrency());
 			if(p1 && !p2) return -1;
 			if(p2 && !p1) return 1;
+			if(p1 && p2) {
+				if(mstruct1.unit()->maxPreferredPrefix() < mstruct2.unit()->maxPreferredPrefix()) return 1;
+				if(mstruct2.unit()->maxPreferredPrefix() < mstruct1.unit()->maxPreferredPrefix()) return -1;
+				if(mstruct1.unit()->minPreferredPrefix() > mstruct2.unit()->minPreferredPrefix()) return 1;
+				if(mstruct2.unit()->minPreferredPrefix() > mstruct1.unit()->minPreferredPrefix()) return -1;
+			}
 			// sort units in alphabetical order
 			if(name_is_less(mstruct1.unit()->preferredDisplayName(po.abbreviate_names, po.use_unicode_signs, mstruct1.isPlural(), po.use_reference_names).name, mstruct2.unit()->preferredDisplayName(po.abbreviate_names, po.use_unicode_signs, mstruct2.isPlural(), po.use_reference_names, po.can_display_unicode_string_function, po.can_display_unicode_string_arg).name)) return -1;
 			return 1;
@@ -457,6 +469,8 @@ int sortCompare(const MathStructure &mstruct1, const MathStructure &mstruct2, co
 		case STRUCT_VARIABLE: {
 			if(mstruct1.variable() == mstruct2.variable()) return 0;
 			if(parent.isMultiplication()) {
+				if(VARIABLE_IS_PERCENTAGE(mstruct2.variable())) return -1;
+				if(VARIABLE_IS_PERCENTAGE(mstruct1.variable())) return 1;
 				// place constant (known) factors first (before unknown variables)
 				if(mstruct1.variable()->isKnown() && !mstruct2.variable()->isKnown()) return -1;
 				if(!mstruct1.variable()->isKnown() && mstruct2.variable()->isKnown()) return 1;
@@ -600,7 +614,7 @@ void MathStructure::sort(const PrintOptions &po, bool recursive) {
 }
 
 void MathStructure::unformat(const EvaluationOptions &eo) {
-	if(m_type == STRUCT_FUNCTION && o_function->id() == FUNCTION_ID_STRIP_UNITS) {
+	if(m_type == STRUCT_FUNCTION && (o_function->id() == FUNCTION_ID_STRIP_UNITS || o_function->id() == FUNCTION_ID_SAVE)) {
 		EvaluationOptions eo2 = eo;
 		eo2.keep_prefixes = true;
 		for(size_t i = 0; i < SIZE; i++) {
@@ -611,6 +625,7 @@ void MathStructure::unformat(const EvaluationOptions &eo) {
 			CHILD(i).unformat(eo);
 		}
 	}
+	if(m_type != STRUCT_UNIT && o_prefix) o_prefix = NULL;
 	switch(m_type) {
 		case STRUCT_INVERSE: {
 			APPEND(m_minus_one);
@@ -1029,6 +1044,7 @@ bool is_unit_multiexp(const MathStructure &mstruct) {
 
 bool MathStructure::improve_division_multipliers(const PrintOptions &po, MathStructure *top_parent) {
 	if(!top_parent) top_parent = this;
+	if(o_prefix) return false;
 	switch(m_type) {
 		case STRUCT_MULTIPLICATION: {
 			size_t inum = 0, iden = 0;
@@ -1036,7 +1052,8 @@ bool MathStructure::improve_division_multipliers(const PrintOptions &po, MathStr
 			size_t index1 = 0, index2 = 0;
 			bool dofrac = true;
 			for(size_t i2 = 0; i2 < SIZE; i2++) {
-				if(CHILD(i2).isPower() && CHILD(i2)[1].isMinusOne()) {
+				if(CHILD(i2).prefix() && !CHILD(i2).isUnit()) {
+				} else if(CHILD(i2).isPower() && CHILD(i2)[1].isMinusOne() && !CHILD(i2)[0].isZero()) {
 					if(!po.place_units_separately || !is_unit_multiexp(CHILD(i2)[0])) {
 						if(iden == 0) index1 = i2;
 						iden++;
@@ -1046,7 +1063,7 @@ bool MathStructure::improve_division_multipliers(const PrintOptions &po, MathStr
 							dofrac = true;
 						}
 					}
-				} else if(!bdiv && CHILD(i2).isPower() && CHILD(i2)[1].hasNegativeSign()) {
+				} else if(!bdiv && CHILD(i2).isPower() && CHILD(i2)[1].hasNegativeSign() && !CHILD(i2)[0].isZero()) {
 					if(!po.place_units_separately || !is_unit_multiexp(CHILD(i2)[0])) {
 						if(!bdiv) index1 = i2;
 						bdiv = true;
@@ -1063,7 +1080,7 @@ bool MathStructure::improve_division_multipliers(const PrintOptions &po, MathStr
 			if(iden > 1) {
 				size_t i2 = index1 + 1;
 				while(i2 < SIZE) {
-					if(CHILD(i2).isPower() && CHILD(i2)[1].isMinusOne()) {
+					if(CHILD(i2).isPower() && CHILD(i2)[1].isMinusOne() && !CHILD(i2)[0].isZero()) {
 						CHILD(index1)[0].multiply(CHILD(i2)[0], true);
 						ERASE(i2);
 						if(index2 > i2) index2--;
@@ -1208,7 +1225,7 @@ bool MathStructure::improve_division_multipliers(const PrintOptions &po, MathStr
 }
 
 bool use_prefix_with_unit(Unit *u, const PrintOptions &po) {
-	if(!po.prefix && !po.use_unit_prefixes) {return u->referenceName() == "g" || u->referenceName() == "a" || u->referenceName() == "mHg";}
+	if(!po.prefix && !po.use_unit_prefixes) {return u->defaultPrefix() != 0;}
 	if(po.prefix) return true;
 	if(u->isCurrency()) return po.use_prefixes_for_currencies;
 	if(po.use_prefixes_for_all_units) return true;
@@ -1440,11 +1457,14 @@ void MathStructure::setPrefixes(const PrintOptions &po, MathStructure *parent, s
 						exp10.abs();
 						exp10.intervalToMidValue();
 						if(exp10.isLessThanOrEqualTo(Number(1, 1, 1000)) && exp10.isGreaterThanOrEqualTo(Number(1, 1, -1000))) {
-							bool use_binary_prefix = (CALCULATOR->usesBinaryPrefixes() > 1 || (CALCULATOR->usesBinaryPrefixes() == 1 && ((munit->isUnit() && munit->unit()->baseUnit()->referenceName() == "bit") || (munit->isPower() && (*munit)[0].unit()->baseUnit()->referenceName() == "bit"))));
+							Unit *u = (munit->isUnit() ? munit->unit() : (*munit)[0].unit());
+							Unit *u2 = NULL;
+							if(b2) u2 = (munit2->isUnit() ? munit2->unit() : (*munit2)[0].unit());
+							bool use_binary_prefix = (CALCULATOR->usesBinaryPrefixes() > 1 || (CALCULATOR->usesBinaryPrefixes() == 1 && u->baseUnit()->referenceName() == "bit"));
 							exp10.log(use_binary_prefix ? 2 : 10);
 							exp10.intervalToMidValue();
 							exp10.floor();
-							if(b2 && exp10.isPositive() && (CALCULATOR->usesBinaryPrefixes() > 1 || (CALCULATOR->usesBinaryPrefixes() == 1 && ((munit2->isUnit() && munit2->unit()->baseUnit()->referenceName() == "bit") || (munit2->isPower() && (*munit2)[0].unit()->baseUnit()->referenceName() == "bit"))))) b2 = false;
+							if(b2 && exp10.isPositive() && (CALCULATOR->usesBinaryPrefixes() > 1 || (CALCULATOR->usesBinaryPrefixes() == 1 && u2->baseUnit()->referenceName() == "bit"))) b2 = false;
 							if(b2 && use_binary_prefix && CALCULATOR->usesBinaryPrefixes() == 1 && exp10.isNegative()) {
 								exp10.clear();
 							} else if(b2) {
@@ -1468,13 +1488,71 @@ void MathStructure::setPrefixes(const PrintOptions &po, MathStructure *parent, s
 									}
 									if(!exp10.isNegative())	i4++;
 								}
+								if(exp10.isNegative()) {
+									if(u2->maxPreferredPrefix() < i4 * 3) {
+										i4 = u2->maxPreferredPrefix() / 3;
+										if(i4 < 0) i4 = 0;
+									}
+								} else {
+									if(u2->minPreferredPrefix() > -(i4 * 3)) {
+										i4 = -(u2->minPreferredPrefix() / 3);
+										if(i4 < 0) i4 = 0;
+									}
+								}
 								e2.setNegative(exp10.isNegative());
 								e2 *= i4;
 								exp10 -= e2;
+								if(exp10.isNegative() != exp.isNegative()) {
+									if(exp10 / exp < u->minPreferredPrefix()) {
+										Number exp10_bak(exp10);
+										if(u->minPreferredPrefix() > -3) exp10 = 0;
+										else exp10 = exp * ((u->minPreferredPrefix() / 3) * 3);
+										e2 /= i4;
+										i4 -= ((exp10_bak - exp10) / exp).intValue();
+										e2 *= i4;
+									}
+								} else {
+									if(exp10 / exp > u->maxPreferredPrefix()) {
+										Number exp10_bak(exp10);
+										if(u->maxPreferredPrefix() < 3) exp10 = 0;
+										else exp10 = exp * (u->maxPreferredPrefix() - u->maxPreferredPrefix() % 3);
+										e2 /= i4;
+										i4 += ((exp10_bak - exp10) / exp).intValue();
+										e2 *= i4;
+									}
+								}
 							}
 							Prefix *p = (use_binary_prefix > 0 ? (Prefix*) CALCULATOR->getOptimalBinaryPrefix(exp10, exp) : (Prefix*) CALCULATOR->getOptimalDecimalPrefix(exp10, exp, po.use_all_prefixes));
-							if(p && p->type() == PREFIX_DECIMAL && ((DecimalPrefix*) p)->exponent() < 0 && ((munit->isUnit() && munit->unit()->referenceName() == "t") || (munit->isPower() && (*munit)[0].unit()->referenceName() == "t"))) {
-								Unit *u = (munit->isUnit() ? munit->unit() : (*munit)[0].unit());
+							if(!po.use_all_prefixes && !po.use_prefixes_for_all_units && p && p->type() == PREFIX_DECIMAL) {
+								if(((DecimalPrefix*) p)->exponent() > u->maxPreferredPrefix()) {
+									p = NULL;
+									int mexp = u->maxPreferredPrefix();
+									if(mexp < 0) {
+										if(mexp % 3 != 0) mexp = ((mexp / 3) - 1) * 3;
+										p = CALCULATOR->getExactDecimalPrefix(mexp);
+									} else if(mexp >= 3) {
+										mexp -= mexp % 3;
+										do {
+											p = CALCULATOR->getExactDecimalPrefix(mexp);
+											mexp -= 3;
+										} while(!p && mexp >= 0);
+									}
+								} else if(((DecimalPrefix*) p)->exponent() < u->minPreferredPrefix()) {
+									p = NULL;
+									int mexp = u->minPreferredPrefix();
+									if(mexp < 0) {
+										if(mexp % 3 != 0) mexp = (mexp / 3) * 3;
+										do {
+											p = CALCULATOR->getExactDecimalPrefix(mexp);
+											mexp += 3;
+										} while(!p && mexp <= 0);
+									} else if(mexp >= 3) {
+										if(mexp % 3 != 0) mexp += (3 - mexp % 3);
+										p = CALCULATOR->getExactDecimalPrefix(mexp);
+									}
+								}
+							}
+							if(p && p->type() == PREFIX_DECIMAL && ((DecimalPrefix*) p)->exponent() < 0 && u->referenceName() == "t") {
 								if(u->subtype() == SUBTYPE_ALIAS_UNIT && ((AliasUnit*) u)->firstBaseUnit()->referenceName() == "g" && ((AliasUnit*) u)->expression() == "1000000" && ((AliasUnit*) u)->firstBaseExponent() == 1) {
 									CHILD(0).number() *= Number(1, 1, 6) ^ exp;
 									if(munit->isUnit()) munit->setUnit(((AliasUnit*) u)->firstBaseUnit());
@@ -1488,7 +1566,10 @@ void MathStructure::setPrefixes(const PrintOptions &po, MathStructure *parent, s
 								if(use_binary_prefix) test_exp -= ((BinaryPrefix*) p)->exponent(exp);
 								else test_exp -= ((DecimalPrefix*) p)->exponent(exp);
 								if(test_exp.isInteger()) {
-									if((exp10.isPositive() && exp10.compare(test_exp) == COMPARISON_RESULT_LESS) || (exp10.isNegative() && exp10.compare(test_exp) == COMPARISON_RESULT_GREATER)) {
+									if((!use_binary_prefix && !b2 && ((test_exp.isNegative() && ((DecimalPrefix*) p)->exponent() < -9) || (((DecimalPrefix*) p)->exponent() > 9 && test_exp > 3))) || ((exp10.isPositive() && exp10 <= test_exp) || (exp10.isNegative() && exp10 >= test_exp))) {
+										p = (u->defaultPrefix() != 0) ? CALCULATOR->getExactDecimalPrefix(u->defaultPrefix()) : NULL;
+									}
+									if(p) {
 										CHILD(0).number() /= p->value(exp);
 										if(munit->isUnit()) munit->setPrefix(p);
 										else (*munit)[0].setPrefix(p);
@@ -1498,12 +1579,10 @@ void MathStructure::setPrefixes(const PrintOptions &po, MathStructure *parent, s
 						}
 					} else if(!po.use_unit_prefixes) {
 						Prefix *p = NULL;
-						if((munit->isUnit() && munit->unit()->referenceName() == "g") || (munit->isPower() && (*munit)[0].unit()->referenceName() == "g")) {
-							p = CALCULATOR->getExactDecimalPrefix(3);
-						} else if((munit->isUnit() && munit->unit()->referenceName() == "a") || (munit->isPower() && (*munit)[0].unit()->referenceName() == "a")) {
-							p = CALCULATOR->getExactDecimalPrefix(2);
-						} else if((munit->isUnit() && munit->unit()->referenceName() == "mHg") || (munit->isPower() && (*munit)[0].unit()->referenceName() == "mHg")) {
-							p = CALCULATOR->getExactDecimalPrefix(-3);
+						if(munit->isUnit() && munit->unit()->defaultPrefix() != 0) {
+							p = CALCULATOR->getExactDecimalPrefix(munit->unit()->defaultPrefix());
+						} else if(munit->isPower() && (*munit)[0].isUnit() && (*munit)[0].unit()->defaultPrefix() != 0) {
+							p = CALCULATOR->getExactDecimalPrefix((*munit)[0].unit()->defaultPrefix());
 						}
 						if(p) {
 							if(munit->isUnit()) munit->setPrefix(p);
@@ -1521,13 +1600,42 @@ void MathStructure::setPrefixes(const PrintOptions &po, MathStructure *parent, s
 						exp10.abs();
 						exp10.intervalToMidValue();
 						if(exp10.isLessThanOrEqualTo(Number(1, 1, 1000)) && exp10.isGreaterThanOrEqualTo(Number(1, 1, -1000))) {
-							bool use_binary_prefix = (CALCULATOR->usesBinaryPrefixes() > 1 || (CALCULATOR->usesBinaryPrefixes() == 1 && ((munit2->isUnit() && munit2->unit()->baseUnit()->referenceName() == "bit") || (munit2->isPower() && (*munit2)[0].unit()->baseUnit()->referenceName() == "bit"))));
+							Unit *u = (munit2->isUnit() ? munit2->unit() : (*munit2)[0].unit());
+							bool use_binary_prefix = (CALCULATOR->usesBinaryPrefixes() > 1 || (CALCULATOR->usesBinaryPrefixes() == 1 && u->baseUnit()->referenceName() == "bit"));
 							exp10.log(use_binary_prefix ? 2 : 10);
 							exp10.intervalToMidValue();
 							exp10.floor();
 							Prefix *p = (use_binary_prefix > 0 ? (Prefix*) CALCULATOR->getOptimalBinaryPrefix(exp10, exp2) : (Prefix*) CALCULATOR->getOptimalDecimalPrefix(exp10, exp2, po.use_all_prefixes));
-							if(p && p->type() == PREFIX_DECIMAL && ((DecimalPrefix*) p)->exponent() < 0 && ((munit2->isUnit() && munit2->unit()->referenceName() == "t") || (munit2->isPower() && (*munit2)[0].unit()->referenceName() == "t"))) {
-								Unit *u = (munit2->isUnit() ? munit2->unit() : (*munit2)[0].unit());
+							if(!po.use_all_prefixes && !po.use_prefixes_for_all_units && p && p->type() == PREFIX_DECIMAL) {
+								if(((DecimalPrefix*) p)->exponent() > u->maxPreferredPrefix()) {
+									p = NULL;
+									int mexp = u->maxPreferredPrefix();
+									if(mexp < 0) {
+										if(mexp % 3 != 0) mexp = ((mexp / 3) - 1) * 3;
+										p = CALCULATOR->getExactDecimalPrefix(mexp);
+									} else if(mexp >= 3) {
+										mexp -= mexp % 3;
+										do {
+											p = CALCULATOR->getExactDecimalPrefix(mexp);
+											mexp -= 3;
+										} while(!p && mexp >= 0);
+									}
+								} else if(((DecimalPrefix*) p)->exponent() < u->minPreferredPrefix()) {
+									p = NULL;
+									int mexp = u->minPreferredPrefix();
+									if(mexp < 0) {
+										if(mexp % 3 != 0) mexp = (mexp / 3) * 3;
+										do {
+											p = CALCULATOR->getExactDecimalPrefix(mexp);
+											mexp += 3;
+										} while(!p && mexp <= 0);
+									} else if(mexp >= 3) {
+										if(mexp % 3 != 0) mexp += (3 - mexp % 3);
+										p = CALCULATOR->getExactDecimalPrefix(mexp);
+									}
+								}
+							}
+							if(p && p->type() == PREFIX_DECIMAL && ((DecimalPrefix*) p)->exponent() < 0 && u->referenceName() == "t") {
 								if(u->subtype() == SUBTYPE_ALIAS_UNIT && ((AliasUnit*) u)->firstBaseUnit()->referenceName() == "g" && ((AliasUnit*) u)->expression() == "1000000" && ((AliasUnit*) u)->firstBaseExponent() == 1) {
 									CHILD(0).number() *= Number(1, 1, 6) ^ exp2;
 									if(munit2->isUnit()) munit2->setUnit(((AliasUnit*) u)->firstBaseUnit());
@@ -1541,7 +1649,42 @@ void MathStructure::setPrefixes(const PrintOptions &po, MathStructure *parent, s
 								if(use_binary_prefix) test_exp -= ((BinaryPrefix*) p)->exponent(exp2);
 								else test_exp -= ((DecimalPrefix*) p)->exponent(exp2);
 								if(test_exp.isInteger()) {
-									if((exp10.isPositive() && exp10.compare(test_exp) == COMPARISON_RESULT_LESS) || (exp10.isNegative() && exp10.compare(test_exp) == COMPARISON_RESULT_GREATER)) {
+									bool b_error = (exp10.isPositive() && exp10 <= test_exp) || (exp10.isNegative() && exp10 >= test_exp);
+									if(b_error || (!use_binary_prefix && (test_exp.isNegative() || test_exp > 3))) {
+										if(b_error || ((DecimalPrefix*) p)->exponent() > 9 || ((DecimalPrefix*) p)->exponent() < -9) {
+											p = (u->defaultPrefix() != 0) ? CALCULATOR->getExactDecimalPrefix(u->defaultPrefix()) : NULL;
+										}
+										Unit *u1 = NULL;
+										Prefix *p1 = NULL;
+										if(munit->isUnit()) {
+											u1 = munit->unit();
+											p1 = munit->prefix();
+										} else if(munit->isPower() && (*munit)[0].isUnit()) {
+											u1 = (*munit)[0].unit();
+											p1 = (*munit)[0].prefix();
+										}
+										if(b_error || (p1 && p1->type() == PREFIX_DECIMAL && (((DecimalPrefix*) p1)->exponent() > 9 || ((DecimalPrefix*) p1)->exponent() < -9))) {
+											if(u1) {
+												if(p1 && p1->type() == PREFIX_DECIMAL) {
+													if(((DecimalPrefix*) p1)->exponent() != u1->defaultPrefix()) {
+														CHILD(0).number() *= p1->value(exp);
+														if(munit->isUnit()) munit->setPrefix(NULL);
+														else (*munit)[0].setPrefix(NULL);
+														p1 = NULL;
+													}
+												}
+											}
+										}
+										if(u1 && !p1 && u1->defaultPrefix() != 0) {
+											p1 = CALCULATOR->getExactDecimalPrefix(u1->defaultPrefix());
+											if(p1) {
+												CHILD(0).number() /= p1->value(exp);
+												if(munit->isUnit()) munit->setPrefix(p1);
+												else (*munit)[0].setPrefix(p1);
+											}
+										}
+									}
+									if(p) {
 										CHILD(0).number() /= p->value(exp2);
 										if(munit2->isUnit()) munit2->setPrefix(p);
 										else (*munit2)[0].setPrefix(p);
@@ -1611,12 +1754,12 @@ bool split_unit_powers(MathStructure &mstruct) {
 void MathStructure::postFormatUnits(const PrintOptions &po, MathStructure *parent, size_t) {
 	switch(m_type) {
 		case STRUCT_DIVISION: {
-			if(po.place_units_separately) {
+			if(po.place_units_separately && !o_prefix) {
 				vector<size_t> nums;
 				bool b1 = false, b2 = false;
 				if(CHILD(0).isMultiplication()) {
 					for(size_t i = 0; i < CHILD(0).size(); i++) {
-						if(CHILD(0)[i].isUnit_exp()) {
+						if(CHILD(0)[i].isUnit_exp() || CHILD(0)[i].prefix()) {
 							nums.push_back(i);
 						} else {
 							b1 = true;
@@ -1629,15 +1772,15 @@ void MathStructure::postFormatUnits(const PrintOptions &po, MathStructure *paren
 				vector<size_t> dens;
 				if(CHILD(1).isMultiplication()) {
 					for(size_t i = 0; i < CHILD(1).size(); i++) {
-						if(CHILD(1)[i].isUnit_exp()) {
+						if(CHILD(1)[i].isUnit_exp() || CHILD(1)[i].prefix()) {
 							dens.push_back(i);
 						} else {
 							b2 = true;
 						}
 					}
 					b2 = b2 && !dens.empty();
-				} else if(CHILD(1).isUnit_exp()) {
-					if(CHILD(0).isUnit_exp()) {
+				} else if(CHILD(1).isUnit_exp() || CHILD(1).prefix()) {
+					if(CHILD(0).isUnit_exp() || CHILD(0).prefix()) {
 						b1 = false;
 					} else {
 						b2 = true;
@@ -1646,7 +1789,7 @@ void MathStructure::postFormatUnits(const PrintOptions &po, MathStructure *paren
 				if(b2 && !b1) b1 = true;
 				if(b1) {
 					MathStructure num = m_undefined;
-					if(CHILD(0).isUnit_exp()) {
+					if(CHILD(0).isUnit_exp() || CHILD(0).prefix()) {
 						num = CHILD(0);
 						CHILD(0).set(m_one);
 					} else if(nums.size() > 0) {
@@ -1662,7 +1805,7 @@ void MathStructure::postFormatUnits(const PrintOptions &po, MathStructure *paren
 						}
 					}
 					MathStructure den = m_undefined;
-					if(CHILD(1).isUnit_exp()) {
+					if(CHILD(1).isUnit_exp() || CHILD(1).prefix()) {
 						den = CHILD(1);
 						setToChild(1, true);
 					} else if(dens.size() > 0) {
@@ -1976,13 +2119,18 @@ bool unnegate_multiplier(MathStructure &mstruct, const PrintOptions &po) {
 	}
 	return false;
 }
-Unit *default_angle_unit(const EvaluationOptions &eo) {
+Unit *default_angle_unit(const EvaluationOptions &eo, bool return_rad_if_none) {
 	switch(eo.parse_options.angle_unit) {
 		case ANGLE_UNIT_DEGREES: {return CALCULATOR->getDegUnit();}
 		case ANGLE_UNIT_GRADIANS: {return CALCULATOR->getGraUnit();}
 		case ANGLE_UNIT_RADIANS: {return CALCULATOR->getRadUnit();}
+		case ANGLE_UNIT_CUSTOM: {
+			if(CALCULATOR->customAngleUnit()) return CALCULATOR->customAngleUnit();
+			break;
+		}
 		default: {}
 	}
+	if(return_rad_if_none) return CALCULATOR->getRadUnit();
 	return NULL;
 }
 
@@ -2054,7 +2202,7 @@ bool MathStructure::removeDefaultAngleUnit(const EvaluationOptions &eo) {
 void separate_units(MathStructure &m, MathStructure *parent = NULL, size_t index = 0) {
 	if(m.isMultiplication() && parent && parent->isMultiplication() && m.containsType(STRUCT_UNIT, false, false, false)) {
 		for(size_t i = 0; i < m.size();) {
-			if(m[i].isUnit_exp()) {
+			if(m[i].isUnit_exp() || m[i].prefix()) {
 				m[i].ref();
 				parent->addChild_nocopy(&m[i]);
 				m.delChild(i + 1);
@@ -2064,10 +2212,10 @@ void separate_units(MathStructure &m, MathStructure *parent = NULL, size_t index
 		}
 		if(m.size() == 0) {parent->delChild(index); return;}
 		else if(m.size() == 1) m.setToChild(1, true);
-	} else if(m.isPower() && m[1].isNumber() && m[1].number().isReal() && m[0].isMultiplication() && m[0].containsType(STRUCT_UNIT, false, false, false)) {
+	} else if(m.isPower() && m[1].isNumber() && m[1].number().isReal() && m[0].isMultiplication() && m[0].containsType(STRUCT_UNIT, false, false, false) && !m.prefix()) {
 		MathStructure units;
 		for(size_t i = 0; i < m[0].size();) {
-			if(m[0][i].isUnit() || (m[0][i].isPower() && m[0][i][0].isUnit() && m[0][i][1].isNumber() && m[0][i][1].number().isReal())) {
+			if(m[0][i].isUnit() || m[0][i].prefix() || (m[0][i].isPower() && (m[0][i][0].isUnit() || m[0][i][0].prefix()) && m[0][i][1].isNumber() && m[0][i][1].number().isReal())) {
 				if(!m[0][i].isPower() || !m[0][i][1].number().multiply(m[1].number())) {
 					m[0][i].raise(m[1]);
 				}
@@ -2127,12 +2275,13 @@ void set_unit_plural(MathStructure &m) {
 		set_unit_plural(m[i]);
 	}
 }
-
 void MathStructure::format(const PrintOptions &po) {
 	if(!po.preserve_format) {
 		if(po.place_units_separately) {
 			// a*u+b*u=(a+b)*u
-			factorizeUnits();
+			if(factorizeUnits()) {
+				flattenMultiplication(*this, true);
+			}
 			separate_units(*this);
 		}
 		sort(po);
@@ -2187,9 +2336,10 @@ void MathStructure::formatsub(const PrintOptions &po, MathStructure *parent, siz
 				PrintOptions po2 = po;
 				po2.negative_exponents = true;
 				CHILD(i).formatsub(po2, this, i + 1, true, top_parent);
-			} else if(po.number_fraction_format == FRACTION_COMBINED && (m_type == STRUCT_FUNCTION || m_type == STRUCT_POWER || (m_type == STRUCT_ADDITION && (!po.place_units_separately || !is_unit_multiadd(*this))) || (m_type == STRUCT_MULTIPLICATION && SIZE > 1 && (!po.place_units_separately || !CHILD(0).isNumber() || !is_unit_multiexp(CHILD(1)))))) {
+			} else if((po.number_fraction_format == FRACTION_COMBINED || po.number_fraction_format == FRACTION_COMBINED_FIXED_DENOMINATOR) && (m_type == STRUCT_FUNCTION || m_type == STRUCT_POWER || (m_type == STRUCT_ADDITION && (!po.place_units_separately || !is_unit_multiadd(*this))) || (m_type == STRUCT_MULTIPLICATION && SIZE > 1 && (!po.place_units_separately || !CHILD(0).isNumber() || !is_unit_multiexp(CHILD(1)))))) {
 				PrintOptions po2 = po;
-				po2.number_fraction_format = FRACTION_FRACTIONAL;
+				if(po.number_fraction_format == FRACTION_COMBINED_FIXED_DENOMINATOR) po2.number_fraction_format = FRACTION_FRACTIONAL_FIXED_DENOMINATOR;
+				else po2.number_fraction_format = FRACTION_FRACTIONAL;
 				CHILD(i).formatsub(po2, this, i + 1, true, top_parent);
 			} else if(!po.preserve_format && i == 1 && m_type == STRUCT_POWER && po.number_fraction_format < FRACTION_FRACTIONAL && CHILD(1).isNumber() && CHILD(1).number().isRational() && !CHILD(1).number().isInteger() && CHILD(1).number().numeratorIsLessThan(10) && CHILD(1).number().numeratorIsGreaterThan(-10) && CHILD(1).number().denominatorIsLessThan(10)) {
 				// always display rational number exponents with small numerator and denominator as fraction (e.g. 5^(2/3) instead of 5^0.666...)
@@ -2602,105 +2752,7 @@ void MathStructure::formatsub(const PrintOptions &po, MathStructure *parent, siz
 			break;
 		}
 		case STRUCT_NUMBER: {
-			bool force_fraction = false;
-			if(!po.preserve_format && parent && parent->isMultiplication() && o_number.isRational()) {
-				// always show fraction format for rational number a in a(f(b)+f(c))
-				for(size_t i = 0; i < parent->size(); i++) {
-					if((*parent)[i].isAddition()) {
-						force_fraction = true;
-						break;
-					}
-				}
-			}
-
-			if((o_number.isNegative() || ((parent || po.interval_display != INTERVAL_DISPLAY_SIGNIFICANT_DIGITS) && o_number.isInterval() && o_number.isNonPositive())) && (po.base != BASE_CUSTOM || !CALCULATOR->customOutputBase().isNegative()) && (po.base > BASE_FP16 || po.base < BASE_FP80) && (po.base < BASE_LATITUDE || po.base > BASE_LONGITUDE_2)) {
-				if((((po.base != 2 || !po.twos_complement) && (po.base != 16 || !po.hexadecimal_twos_complement)) || !o_number.isInteger()) && (!o_number.isMinusInfinity() || (parent && parent->isAddition()))) {
-					// a=-(-a), if a is a negative number (or a is interval from negative value to 0), and not using two's complement and not using negative number base
-					o_number.negate();
-					transform(STRUCT_NEGATE);
-					formatsub(po, parent, pindex, true, top_parent);
-				}
-			} else if((force_fraction || po.number_fraction_format >= FRACTION_FRACTIONAL || po.base == BASE_ROMAN_NUMERALS || po.number_fraction_format == FRACTION_DECIMAL_EXACT) && po.base > BASE_FP16 && !BASE_IS_SEXAGESIMAL(po.base) && po.base != BASE_TIME && o_number.isRational() && !o_number.isInteger() && (force_fraction || !o_number.isApproximate())) {
-				// split rational number in numerator and denominator, if display of fractions is requested for rational numbers and number base is not sexagesimal and number is not approximate
-
-				InternalPrintStruct ips_n;
-
-				// parent approximate status affects the display of numbers if force_fraction is not true
-				if(!force_fraction && (isApproximate() || (top_parent && top_parent->isApproximate()))) ips_n.parent_approximate = true;
-
-				// if current mode and parent precision dictates showing of ending zeroes, number is not shown as fraction
-				if(po.show_ending_zeroes && po.restrict_to_parent_precision && ips_n.parent_approximate && po.base != BASE_ROMAN_NUMERALS && po.base != BASE_BIJECTIVE_26 && (o_number.numeratorIsGreaterThan(9) || o_number.numeratorIsLessThan(-9) || o_number.denominatorIsGreaterThan(9))) {
-					break;
-				}
-				ips_n.parent_precision = precision();
-				if(top_parent && top_parent->precision() < 0 && top_parent->precision() < ips_n.parent_precision) ips_n.parent_precision = top_parent->precision();
-
-				bool approximately_displayed = false;
-				PrintOptions po2 = po;
-				po2.is_approximate = &approximately_displayed;
-				po2.indicate_infinite_series = false;
-				if(force_fraction && (po2.number_fraction_format == FRACTION_DECIMAL || po2.number_fraction_format == FRACTION_DECIMAL_EXACT)) po2.number_fraction_format = FRACTION_FRACTIONAL;
-				if(!force_fraction && po.base != BASE_ROMAN_NUMERALS && po.base != BASE_BIJECTIVE_26 && po.number_fraction_format == FRACTION_DECIMAL_EXACT) {
-					// if FRACTION_DECIMAL_EXACT is active, numbers is not displayed as fraction if they can be shown exact using decimals
-					po2.number_fraction_format = FRACTION_DECIMAL;
-					o_number.print(po2, ips_n);
-					if(!approximately_displayed) break;
-					approximately_displayed = false;
-				}
-
-				// test if numerator and denominator is displayed exact using current mode
-				Number num(o_number.numerator());
-				if(po.number_fraction_format == FRACTION_COMBINED) {
-					num.mod(o_number.denominator());
-				}
-				Number den(o_number.denominator());
-				if(isApproximate()) {
-					num.setApproximate();
-					den.setApproximate();
-				}
-				num.print(po2, ips_n);
-				if(!approximately_displayed || po.base == BASE_ROMAN_NUMERALS || po.base == BASE_BIJECTIVE_26) {
-					den.print(po2, ips_n);
-					if(!approximately_displayed || po.base == BASE_ROMAN_NUMERALS || po.base == BASE_BIJECTIVE_26) {
-						if(po.number_fraction_format == FRACTION_COMBINED && !o_number.isFraction()) {
-							// mixed fraction format (e.g. 5/3=1+2/3)
-							Number nr_int(o_number);
-							nr_int.trunc();
-							if(isApproximate()) nr_int.setApproximate();
-							nr_int.print(po2, ips_n);
-							if(!approximately_displayed || po.base == BASE_ROMAN_NUMERALS || po.base == BASE_BIJECTIVE_26) {
-								set(nr_int);
-								MathStructure *mterm;
-								if(num.isOne()) {
-									mterm = new MathStructure(den);
-									mterm->transform(STRUCT_INVERSE);
-								} else {
-									mterm = new MathStructure(num);
-									mterm->transform(STRUCT_DIVISION, den);
-								}
-								add_nocopy(mterm);
-								break;
-							} else {
-								approximately_displayed = false;
-								num = o_number.numerator();
-								if(isApproximate()) num.setApproximate();
-								num.print(po2, ips_n);
-							}
-						}
-						if(!approximately_displayed || po.base == BASE_ROMAN_NUMERALS || po.base == BASE_BIJECTIVE_26) {
-							// both numerator and denominator is displayed exact: split up number
-							clear(true);
-							if(num.isOne()) {
-								m_type = STRUCT_INVERSE;
-							} else {
-								m_type = STRUCT_DIVISION;
-								APPEND_NEW(num);
-							}
-							APPEND_NEW(den);
-						}
-					}
-				}
-			} else if(o_number.hasImaginaryPart()) {
+			if(o_number.hasImaginaryPart()) {
 				if(o_number.hasRealPart()) {
 					// split up complex number in real and imaginary part (Z=re(Z)+im(Z)*i)
 					Number re(o_number.realPart());
@@ -2729,6 +2781,138 @@ void MathStructure::formatsub(const PrintOptions &po, MathStructure *parent, siz
 						if(CALCULATOR->getVariableById(VARIABLE_ID_I)->preferredDisplayName(po.abbreviate_names, po.use_unicode_signs, false, po.use_reference_names, po.can_display_unicode_string_function, po.can_display_unicode_string_arg).name == "j") SWAP_CHILDREN(0, 1);
 					}
 					formatsub(po, parent, pindex, true, top_parent);
+				}
+				break;
+			}
+			if(po.number_fraction_format == FRACTION_PERCENT && po.base > BASE_FP16 && !BASE_IS_SEXAGESIMAL(po.base) && po.base != BASE_TIME && !o_number.isInteger()) {
+				if(!o_number.multiply(100)) break;
+				multiply(CALCULATOR->getVariableById(VARIABLE_ID_PERCENT));
+				break;
+			} else if(po.number_fraction_format == FRACTION_PERMILLE && po.base > BASE_FP16 && !BASE_IS_SEXAGESIMAL(po.base) && po.base != BASE_TIME && !o_number.isInteger()) {
+				if(!o_number.multiply(1000)) break;
+				multiply(CALCULATOR->getVariableById(VARIABLE_ID_PERMILLE));
+				break;
+			} else if(po.number_fraction_format == FRACTION_PERMYRIAD && po.base > BASE_FP16 && !BASE_IS_SEXAGESIMAL(po.base) && po.base != BASE_TIME && !o_number.isInteger()) {
+				if(!o_number.multiply(10000)) break;
+				multiply(CALCULATOR->getVariableById(VARIABLE_ID_PERMYRIAD));
+				break;
+			}
+			bool force_fraction = false;
+			if(!po.preserve_format && parent && parent->isMultiplication() && o_number.isRational()) {
+				// always show fraction format for rational number a in a(f(b)+f(c))
+				for(size_t i = 0; i < parent->size(); i++) {
+					if((*parent)[i].isAddition()) {
+						force_fraction = true;
+						break;
+					}
+				}
+			}
+			if((o_number.isNegative() || ((parent || po.interval_display != INTERVAL_DISPLAY_SIGNIFICANT_DIGITS) && o_number.isInterval() && o_number.isNonPositive())) && (po.base != BASE_CUSTOM || !CALCULATOR->customOutputBase().isNegative()) && (po.base > BASE_FP16 || po.base < BASE_FP80) && (po.base < BASE_LATITUDE || po.base > BASE_LONGITUDE_2)) {
+				if((((po.base != 2 || !po.twos_complement) && (po.base != 16 || !po.hexadecimal_twos_complement)) || !o_number.isInteger()) && (!o_number.isMinusInfinity() || (parent && parent->isAddition()))) {
+					// a=-(-a), if a is a negative number (or a is interval from negative value to 0), and not using two's complement and not using negative number base
+					o_number.negate();
+					transform(STRUCT_NEGATE);
+					formatsub(po, parent, pindex, true, top_parent);
+				}
+			} else if((((force_fraction || po.number_fraction_format == FRACTION_FRACTIONAL || po.number_fraction_format == FRACTION_COMBINED || po.number_fraction_format == FRACTION_DECIMAL_EXACT || po.base == BASE_ROMAN_NUMERALS) && o_number.isRational() && (force_fraction || !o_number.isApproximate())) || (po.number_fraction_format == FRACTION_FRACTIONAL_FIXED_DENOMINATOR || po.number_fraction_format == FRACTION_COMBINED_FIXED_DENOMINATOR)) && po.base > BASE_FP16 && !BASE_IS_SEXAGESIMAL(po.base) && po.base != BASE_TIME && (po.number_fraction_format == FRACTION_FRACTIONAL_FIXED_DENOMINATOR || !o_number.isInteger())) {
+				// split rational number in numerator and denominator, if display of fractions is requested for rational numbers and number base is not sexagesimal and number is not approximate
+
+				InternalPrintStruct ips_n;
+
+				// parent approximate status affects the display of numbers if force_fraction is not true
+				if(!force_fraction && (isApproximate() || (top_parent && top_parent->isApproximate()))) ips_n.parent_approximate = true;
+
+				// if current mode and parent precision dictates showing of ending zeroes, number is not shown as fraction
+				if(po.show_ending_zeroes && po.restrict_to_parent_precision && ips_n.parent_approximate && po.base != BASE_ROMAN_NUMERALS && po.base != BASE_BIJECTIVE_26 && (o_number.numeratorIsGreaterThan(9) || o_number.numeratorIsLessThan(-9) || o_number.denominatorIsGreaterThan(9))) {
+					break;
+				}
+				ips_n.parent_precision = precision();
+				if(top_parent && top_parent->precision() < 0 && top_parent->precision() < ips_n.parent_precision) ips_n.parent_precision = top_parent->precision();
+
+				bool approximately_displayed = false;
+				PrintOptions po2 = po;
+				po2.is_approximate = &approximately_displayed;
+				po2.indicate_infinite_series = false;
+				if(force_fraction && (po2.number_fraction_format == FRACTION_DECIMAL || po2.number_fraction_format == FRACTION_DECIMAL_EXACT)) po2.number_fraction_format = FRACTION_FRACTIONAL;
+				if(!force_fraction && po.base != BASE_ROMAN_NUMERALS && po.base != BASE_BIJECTIVE_26 && po.number_fraction_format == FRACTION_DECIMAL_EXACT) {
+					// if FRACTION_DECIMAL_EXACT is active, numbers is not displayed as fraction if they can be shown exact using decimals
+					po2.number_fraction_format = FRACTION_DECIMAL;
+					o_number.print(po2, ips_n);
+					if(!approximately_displayed) break;
+					approximately_displayed = false;
+				}
+
+				// test if numerator and denominator is displayed exact using current mode
+				Number num, den;
+				if(po.number_fraction_format == FRACTION_FRACTIONAL_FIXED_DENOMINATOR || po.number_fraction_format == FRACTION_COMBINED_FIXED_DENOMINATOR) {
+					den.set(CALCULATOR->fixedDenominator(), 1, 0);
+					num.set(o_number);
+					if(!num.multiply(den)) break;
+					if(!num.isInteger()) {
+						if(po.custom_time_zone == TZ_TRUNCATE || po.custom_time_zone == TZ_TRUNCATE + TZ_DOZENAL) num.trunc();
+						else num.round(po.round_halfway_to_even);
+						if(!num.isInteger()) {
+							num.set(o_number);
+							num.multiply(den);
+						}
+						setApproximate();
+					}
+				} else {
+					num.set(o_number.numerator());
+					den.set(o_number.denominator());
+				}
+				if(po.number_fraction_format == FRACTION_COMBINED || po.number_fraction_format == FRACTION_COMBINED_FIXED_DENOMINATOR) {
+					num.mod(den);
+				}
+				if(isApproximate()) {
+					num.setApproximate();
+					den.setApproximate();
+				}
+				if(po.base != BASE_ROMAN_NUMERALS && po.base != BASE_BIJECTIVE_26 && po.number_fraction_format != FRACTION_FRACTIONAL_FIXED_DENOMINATOR && po.number_fraction_format != FRACTION_COMBINED_FIXED_DENOMINATOR) num.print(po2, ips_n);
+				if(!approximately_displayed) {
+					if(po.base != BASE_ROMAN_NUMERALS && po.base != BASE_BIJECTIVE_26 && po.number_fraction_format != FRACTION_FRACTIONAL_FIXED_DENOMINATOR && po.number_fraction_format != FRACTION_COMBINED_FIXED_DENOMINATOR) den.print(po2, ips_n);
+					if(!approximately_displayed) {
+						if((po.number_fraction_format == FRACTION_COMBINED || po.number_fraction_format == FRACTION_COMBINED_FIXED_DENOMINATOR) && !o_number.isFraction()) {
+							// mixed fraction format (e.g. 5/3=1+2/3)
+							Number nr_int(o_number);
+							nr_int.trunc();
+							if(isApproximate()) nr_int.setApproximate();
+							if(po.base != BASE_ROMAN_NUMERALS && po.base != BASE_BIJECTIVE_26 && po.number_fraction_format != FRACTION_FRACTIONAL_FIXED_DENOMINATOR && po.number_fraction_format != FRACTION_COMBINED_FIXED_DENOMINATOR) nr_int.print(po2, ips_n);
+							if(!approximately_displayed) {
+								set(nr_int);
+								if(!num.isZero()) {
+									MathStructure *mterm;
+									if(num.isOne()) {
+										mterm = new MathStructure(den);
+										mterm->transform(STRUCT_INVERSE);
+									} else {
+										mterm = new MathStructure(num);
+										mterm->transform(STRUCT_DIVISION, den);
+									}
+									add_nocopy(mterm);
+								}
+								break;
+							} else {
+								approximately_displayed = false;
+								num = o_number.numerator();
+								if(isApproximate()) num.setApproximate();
+								num.print(po2, ips_n);
+							}
+						}
+						if(!approximately_displayed) {
+							// both numerator and denominator is displayed exact: split up number
+							clear(true);
+							if(!num.isZero()) {
+								if(num.isOne()) {
+									m_type = STRUCT_INVERSE;
+								} else {
+									m_type = STRUCT_DIVISION;
+									APPEND_NEW(num);
+								}
+								APPEND_NEW(den);
+							}
+						}
+					}
 				}
 			}
 			break;
@@ -2793,7 +2977,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_LOGICAL_XOR: {return true;}
 				case STRUCT_LOGICAL_NOT: {return po.excessive_parenthesis;}
 				case STRUCT_COMPARISON: {return true;}
-				case STRUCT_FUNCTION: {return o_function->id() == FUNCTION_ID_UNCERTAINTY;}
+				case STRUCT_FUNCTION: {return o_function->id() == FUNCTION_ID_UNCERTAINTY && SIZE == 3 && CHILD(2).isZero();}
 				case STRUCT_VECTOR: {return false;}
 				case STRUCT_NUMBER: {return o_number.isInfinite() || (o_number.hasImaginaryPart() && o_number.hasRealPart()) || (o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval()));}
 				case STRUCT_VARIABLE: {return false;}
@@ -2823,7 +3007,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_LOGICAL_XOR: {return flat_division || po.excessive_parenthesis;}
 				case STRUCT_LOGICAL_NOT: {return flat_division && po.excessive_parenthesis;}
 				case STRUCT_COMPARISON: {return flat_division || po.excessive_parenthesis;}
-				case STRUCT_FUNCTION: {return o_function->id() == FUNCTION_ID_UNCERTAINTY;}
+				case STRUCT_FUNCTION: {return o_function->id() == FUNCTION_ID_UNCERTAINTY && SIZE == 3 && CHILD(2).isZero();}
 				case STRUCT_VECTOR: {return false;}
 				case STRUCT_NUMBER: {
 					return (flat_division || po.excessive_parenthesis) && (o_number.isInfinite() || o_number.hasImaginaryPart() || (o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval())));
@@ -2883,7 +3067,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_LOGICAL_XOR: {return true;}
 				case STRUCT_LOGICAL_NOT: {return index == 1 || po.excessive_parenthesis;}
 				case STRUCT_COMPARISON: {return true;}
-				case STRUCT_FUNCTION: {return o_function->id() == FUNCTION_ID_UNCERTAINTY;}
+				case STRUCT_FUNCTION: {return o_function->id() == FUNCTION_ID_UNCERTAINTY && SIZE == 3 && CHILD(2).isZero();}
 				case STRUCT_VECTOR: {return false;}
 				case STRUCT_NUMBER: {return o_number.isInfinite() || o_number.hasImaginaryPart() || (index == 1 && o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval()));}
 				case STRUCT_VARIABLE: {return false;}
@@ -3147,7 +3331,7 @@ int MathStructure::neededMultiplicationSign(const PrintOptions &po, const Intern
 				}
 			}
 			return MULTIPLICATION_SIGN_SPACE;
-		}
+		} else if(isVariable() && VARIABLE_IS_PERCENTAGE(o_variable)) return MULTIPLICATION_SIGN_NONE;
 		// (a)*bc
 		return MULTIPLICATION_SIGN_OPERATOR;
 	}
@@ -3288,6 +3472,32 @@ bool has_power_in_power(const MathStructure &m) {
 	return false;
 }
 
+bool has_nonunicode_power(const MathStructure &m, const PrintOptions &po, bool only_units = false) {
+	if(m.isPower()) {
+		if(only_units && !m[0].isUnit()) return false;
+		if(!m[1].isInteger() || m[1].number().isNegative() || m[1].number() > 9) return true;
+		if(!only_units && has_nonunicode_power(m[0], po)) return true;
+		if(!po.can_display_unicode_string_function) return false;
+		switch(m[1].number().intValue()) {
+			case 2: {return !(*po.can_display_unicode_string_function) (SIGN_POWER_2, po.can_display_unicode_string_arg);}
+			case 3: {return !(*po.can_display_unicode_string_function) (SIGN_POWER_3, po.can_display_unicode_string_arg);}
+			case 4: {return !(*po.can_display_unicode_string_function) (SIGN_POWER_4, po.can_display_unicode_string_arg);}
+			case 5: {return !(*po.can_display_unicode_string_function) (SIGN_POWER_5, po.can_display_unicode_string_arg);}
+			case 6: {return !(*po.can_display_unicode_string_function) (SIGN_POWER_6, po.can_display_unicode_string_arg);}
+			case 7: {return !(*po.can_display_unicode_string_function) (SIGN_POWER_7, po.can_display_unicode_string_arg);}
+			case 8: {return !(*po.can_display_unicode_string_function) (SIGN_POWER_8, po.can_display_unicode_string_arg);}
+			case 9: {return !(*po.can_display_unicode_string_function) (SIGN_POWER_9, po.can_display_unicode_string_arg);}
+			case 0: {return !(*po.can_display_unicode_string_function) (SIGN_POWER_0, po.can_display_unicode_string_arg);}
+			case 1: {return !(*po.can_display_unicode_string_function) (SIGN_POWER_1, po.can_display_unicode_string_arg);}
+		}
+		return true;
+	}
+	for(size_t i = 0; i < m.size(); i++) {
+		if(has_nonunicode_power(m[i], po, only_units)) return true;
+	}
+	return false;
+}
+
 size_t unformatted_unicode_length(const string &str) {
 	size_t l = str.length(), l2 = 0;
 	for(size_t i = 0; i < l; i++) {
@@ -3306,14 +3516,31 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 	if(ips.depth == 0 && po.is_approximate) *po.is_approximate = false;
 	string print_str;
 	InternalPrintStruct ips_n = ips;
-	if(isApproximate()) ips_n.parent_approximate = true;
-	if(ips.depth == 0 && format && tagtype == TAG_TYPE_HTML && has_power_in_power(*this)) {
-		ips_n.power_depth = -1;
+	if(isApproximate()) {
+		ips_n.parent_approximate = true;
+		if(po.is_approximate) *po.is_approximate = true;
 	}
-	bool flat_power = !format || tagtype != TAG_TYPE_HTML || ips_n.power_depth != 0;
+	if(ips.depth == 0 && ((format && tagtype == TAG_TYPE_HTML && has_power_in_power(*this)) || (tagtype == TAG_TYPE_TERMINAL && po.use_unicode_signs && (colorize < 0 || has_nonunicode_power(*this, po))))) {
+		ips_n.power_depth = (colorize <= -10 || has_nonunicode_power(*this, po, true) ? -2 : -1);
+	}
+	if(ips.depth == 0 && tagtype == TAG_TYPE_TERMINAL && colorize < 0) {
+		colorize = -colorize;
+		if(colorize >= 10) colorize /= 10;
+	}
+	bool flat_power = ips_n.power_depth != 0 || (tagtype != TAG_TYPE_TERMINAL && (!format || tagtype != TAG_TYPE_HTML));
 	if(precision() >= 0 && (ips_n.parent_precision < 0 || precision() < ips_n.parent_precision)) ips_n.parent_precision = precision();
 	switch(m_type) {
 		case STRUCT_NUMBER: {
+			if(po.number_fraction_format == FRACTION_FRACTIONAL_FIXED_DENOMINATOR || po.number_fraction_format == FRACTION_COMBINED_FIXED_DENOMINATOR) {
+				PrintOptions po2 = po;
+				po2.show_ending_zeroes = false;
+				po2.number_fraction_format = FRACTION_FRACTIONAL;
+				return print(po2, format, colorize, tagtype, ips);
+			} else if(po.number_fraction_format == FRACTION_PERCENT || po.number_fraction_format == FRACTION_PERMILLE || po.number_fraction_format == FRACTION_PERMYRIAD) {
+				PrintOptions po2 = po;
+				po2.number_fraction_format = FRACTION_DECIMAL;
+				return print(po2, format, colorize, tagtype, ips);
+			}
 			if(colorize && tagtype == TAG_TYPE_TERMINAL) print_str = (colorize == 2 ? "\033[0;96m" : "\033[0;36m");
 			else if(colorize && tagtype == TAG_TYPE_HTML) print_str = (colorize == 2 ? "<span style=\"color:#AAFFFF\">" : "<span style=\"color:#005858\">");
 			size_t i_number = print_str.length();
@@ -3321,14 +3548,32 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 			if(format && tagtype == TAG_TYPE_HTML && ips.power_depth <= 0) {
 				string exp;
 				bool exp_minus = false;
-				if(!po.lower_case_e) {
+				bool base10 = (po.base == BASE_DECIMAL);
+				bool base_without_exp = (po.base != BASE_DECIMAL && po.base_display == BASE_DISPLAY_SUFFIX && !BASE_IS_SEXAGESIMAL(po.base) && po.base != BASE_TIME && ((po.base < BASE_CUSTOM && po.base != BASE_BIJECTIVE_26) || (po.base == BASE_CUSTOM && (!CALCULATOR->customOutputBase().isInteger() || CALCULATOR->customOutputBase() > 62 || CALCULATOR->customOutputBase() < 2))));
+				if(!po.lower_case_e || (base_without_exp && po.base_display == BASE_DISPLAY_SUFFIX) || (po.base != BASE_DECIMAL && po.base >= 2 && po.base <= 36)) {
 					ips_n.exp = &exp;
 					ips_n.exp_minus = &exp_minus;
+					if(po.lower_case_e && base_without_exp) {
+						o_number.print(po, ips_n);
+						base10 = !exp.empty();
+						exp = "";
+						exp_minus = false;
+						ips_n.exp = NULL;
+						ips_n.exp_minus = NULL;
+					}
+				} else {
+					ips_n.exp = NULL;
+					ips_n.exp_minus = NULL;
 				}
+
 				print_str += o_number.print(po, ips_n);
+
+				if(!exp.empty() && (base_without_exp || (po.base != BASE_CUSTOM && (po.base < 2 || po.base > 36)) || (po.base == BASE_CUSTOM && (!CALCULATOR->customOutputBase().isInteger() || CALCULATOR->customOutputBase() > 62 || CALCULATOR->customOutputBase() < 2)))) base10 = true;
+
 				i_number_end = print_str.length();
-				if(po.base != BASE_DECIMAL && po.base_display == BASE_DISPLAY_SUFFIX && !BASE_IS_SEXAGESIMAL(po.base) && po.base != BASE_TIME) {
+				if(po.base != BASE_DECIMAL && po.base_display == BASE_DISPLAY_SUFFIX && (base10 || (!BASE_IS_SEXAGESIMAL(po.base) && po.base != BASE_TIME))) {
 					int base = po.base;
+					if(base10) base = 10;
 					if(base <= BASE_FP16 && base >= BASE_FP80) base = BASE_BINARY;
 					bool twos = (((po.base == BASE_BINARY && po.twos_complement) || (po.base == BASE_HEXADECIMAL && po.hexadecimal_twos_complement)) && o_number.isNegative() && print_str.find(SIGN_MINUS) == string::npos && print_str.find("-") == string::npos);
 					if((twos || po.base_display != BASE_DISPLAY_ALTERNATIVE || (base != BASE_HEXADECIMAL && base != BASE_BINARY && base != BASE_OCTAL)) && (base > 0 || base <= BASE_CUSTOM) && base <= 36) {
@@ -3353,14 +3598,30 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 				}
 				if(!exp.empty()) {
 					gsub(" ", "&nbsp;", exp);
-					if(po.spacious) print_str += " ";
-					if(po.use_unicode_signs && po.multiplication_sign == MULTIPLICATION_SIGN_DOT && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MULTIDOT, po.can_display_unicode_string_arg))) print_str += SIGN_MULTIDOT;
-					else if(po.use_unicode_signs && (po.multiplication_sign == MULTIPLICATION_SIGN_DOT || po.multiplication_sign == MULTIPLICATION_SIGN_ALTDOT) && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MIDDLEDOT, po.can_display_unicode_string_arg))) print_str += SIGN_MIDDLEDOT;
-					else if(po.use_unicode_signs && po.multiplication_sign == MULTIPLICATION_SIGN_X && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MULTIPLICATION, po.can_display_unicode_string_arg))) print_str += SIGN_MULTIPLICATION;
-					else print_str += "*";
-					if(po.spacious) print_str += " ";
-					if(po.base == BASE_DECIMAL) print_str += "10";
-					else if(po.base >= 2 && po.base <= 36) print_str += i2s(po.base);
+					if(print_str.length() - i_number == 1 && print_str[i_number] == '1') {
+						print_str.erase(i_number, 1);
+					} else {
+						if(po.spacious) print_str += " ";
+						if(po.use_unicode_signs && po.multiplication_sign == MULTIPLICATION_SIGN_DOT && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MULTIDOT, po.can_display_unicode_string_arg))) print_str += SIGN_MULTIDOT;
+						else if(po.use_unicode_signs && (po.multiplication_sign == MULTIPLICATION_SIGN_DOT || po.multiplication_sign == MULTIPLICATION_SIGN_ALTDOT) && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MIDDLEDOT, po.can_display_unicode_string_arg))) print_str += SIGN_MIDDLEDOT;
+						else if(po.use_unicode_signs && po.multiplication_sign == MULTIPLICATION_SIGN_X && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MULTIPLICATION, po.can_display_unicode_string_arg))) print_str += SIGN_MULTIPLICATION;
+						else print_str += "*";
+						if(po.spacious) print_str += " ";
+					}
+					if(base10) {
+						print_str += "10";
+					} else {
+						MathStructure nrbase;
+						if(po.base == BASE_CUSTOM) nrbase = CALCULATOR->customOutputBase();
+						else nrbase = po.base;
+						PrintOptions po2 = po;
+						po2.interval_display = INTERVAL_DISPLAY_MIDPOINT;
+						po2.min_exp = EXP_NONE;
+						po2.twos_complement = false;
+						po2.hexadecimal_twos_complement = false;
+						po2.binary_bits = 0;
+						print_str += nrbase.print(po2, true, false, TAG_TYPE_HTML);
+					}
 					print_str += "<sup>";
 					if(exp_minus) {
 						if(po.use_unicode_signs && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MINUS, po.can_display_unicode_string_arg))) print_str += SIGN_MINUS;
@@ -3370,7 +3631,14 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 					print_str += "</sup>";
 				} else if(BASE_IS_SEXAGESIMAL(po.base) || po.base == BASE_TIME) {
 					if(!po.lower_case_e) {
-						gsub("E", "e", print_str);
+						size_t i = 0;
+						while(true) {
+							i = print_str.find("E", i + 1);
+							if(i == string::npos || i == print_str.length() - 1) break;
+							if(print_str[i - 1] >= '0' && print_str[i - 1] <= '9' && print_str[i + 1] >= '0' && print_str[i + 1] <= '9') {
+								print_str.replace(i, 1, "e");
+							}
+						}
 					}
 					if(po.use_unicode_signs && (!po.can_display_unicode_string_function ||(*po.can_display_unicode_string_function) (SIGN_MINUS, po.can_display_unicode_string_arg))) gsub("-", SIGN_MINUS, print_str);
 				}
@@ -3586,7 +3854,7 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 			ips_n.depth++;
 			ips_n.division_depth++;
 			ips_n.wrap = false;
-			bool b_num = !po.preserve_format && CHILD(0).isInteger();
+			bool b_num = !po.preserve_format && CHILD(0).isInteger() && !CHILD(0).isZero();
 			bool b_num2 = b_num && (po.division_sign == DIVISION_SIGN_SLASH || (tagtype != TAG_TYPE_TERMINAL && po.division_sign == DIVISION_SIGN_DIVISION_SLASH));
 			if(b_num2 && colorize && tagtype == TAG_TYPE_TERMINAL) print_str += (colorize == 2 ? "\033[0;96m" : "\033[0;36m");
 			else if(b_num2 && colorize && tagtype == TAG_TYPE_HTML) print_str += (colorize == 2 ? "<span style=\"color:#AAFFFF\">" : "<span style=\"color:#005858\">");
@@ -3623,7 +3891,7 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 		case STRUCT_DIVISION: {
 			ips_n.depth++;
 			ips_n.division_depth++;
-			bool b_num = !po.preserve_format && CHILD(0).isInteger() && CHILD(1).isInteger();
+			bool b_num = !po.preserve_format && CHILD(0).isInteger() && CHILD(1).isInteger() && !CHILD(1).isZero();
 			bool b_num2 = b_num && (po.division_sign == DIVISION_SIGN_SLASH || (tagtype != TAG_TYPE_TERMINAL && po.division_sign == DIVISION_SIGN_DIVISION_SLASH));
 			bool b_units = false;
 			if(!b_num && po.place_units_separately) {
@@ -3698,31 +3966,6 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 		}
 		case STRUCT_POWER: {
 			ips_n.depth++;
-			if(!po.negative_exponents && tagtype == TAG_TYPE_TERMINAL && po.use_unicode_signs && po.place_units_separately && CHILD(0).isUnit() && CHILD(1).isInteger() && CHILD(1).number() >= 2 && CHILD(1).number() <= 9) {
-				string s_super;
-				if(CHILD(1).number() == 2) s_super = SIGN_POWER_2;
-				else if(CHILD(1).number() == 3) s_super = SIGN_POWER_3;
-				else if(CHILD(1).number() == 4) s_super = SIGN_POWER_4;
-				else if(CHILD(1).number() == 5) s_super = SIGN_POWER_5;
-				else if(CHILD(1).number() == 6) s_super = SIGN_POWER_6;
-				else if(CHILD(1).number() == 7) s_super = SIGN_POWER_7;
-				else if(CHILD(1).number() == 8) s_super = SIGN_POWER_8;
-				else if(CHILD(1).number() == 9) s_super = SIGN_POWER_9;
-				if(!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (s_super.c_str(), po.can_display_unicode_string_arg)) {
-					if(colorize) print_str = (colorize == 2 ? "\033[0;92m" : "\033[0;32m");
-					ips_n.wrap = false;
-					if(CHILD(0).isUnit() && po.use_unicode_signs && po.abbreviate_names && CHILD(0).unit() == CALCULATOR->getDegUnit()) {
-						PrintOptions po2 = po;
-						po2.use_unicode_signs = false;
-						print_str += CHILD(0).print(po2, format, false, tagtype, ips_n);
-					} else {
-						print_str += CHILD(0).print(po, format, false, tagtype, ips_n);
-					}
-					print_str += s_super;
-					if(colorize) print_str += "\033[0m";
-					break;
-				}
-			}
 			ips_n.wrap = CHILD(0).needsParenthesis(po, ips_n, *this, 1, true, true);
 			bool b_units = po.place_units_separately && (tagtype == TAG_TYPE_TERMINAL || tagtype == TAG_TYPE_HTML) && COLORIZE_AS_UNIT((*this));
 			if(b_units && colorize && tagtype == TAG_TYPE_TERMINAL) print_str = colorize == 2 ? "\033[0;92m" : "\033[0;32m";
@@ -3730,32 +3973,50 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 			PrintOptions po2 = po;
 			if(CHILD(0).isUnit() && po.use_unicode_signs && po.abbreviate_names && CHILD(0).unit() == CALCULATOR->getDegUnit()) po2.use_unicode_signs = false;
 			print_str += CHILD(0).print(po2, format, b_units ? 0 : colorize, tagtype, ips_n);
-			po2.use_unicode_signs = po.use_unicode_signs;
-			po2.show_ending_zeroes = false;
-			bool b_sup = ips_n.power_depth == 0 && format && tagtype == TAG_TYPE_HTML;
-			if(b_sup && b_units) {
-				print_str += "<sup>";
-				b_sup = false;
-				if(ips_n.power_depth < 0) ips_n.power_depth = 1;
-				else ips_n.power_depth++;
-				print_str += CHILD(1).print(po2, format, 0, tagtype, ips_n);
-				print_str += "</sup>";
-			} else if(!b_sup) {
-				print_str += "^";
-				if(ips_n.power_depth < 0) ips_n.power_depth = 1;
-				else ips_n.power_depth++;
-				ips_n.wrap = CHILD(1).needsParenthesis(po, ips_n, *this, 2, true, true);
-				print_str += CHILD(1).print(po2, format, b_units ? 0 : colorize, tagtype, ips_n);
-			}
-			if(b_units && colorize && tagtype == TAG_TYPE_TERMINAL) print_str += "\033[0m";
-			else if(b_units && colorize && tagtype == TAG_TYPE_HTML) print_str += "</span>";
-			if(b_sup) {
-				ips_n.wrap = false;
-				print_str += "<sup>";
-				if(ips_n.power_depth < 0) ips_n.power_depth = 1;
-				else ips_n.power_depth++;
-				print_str += CHILD(1).print(po2, format, b_units ? 0 : colorize, tagtype, ips_n);
-				print_str += "</sup>";
+			if((!flat_power || (ips.power_depth == -1 && po.place_units_separately && CHILD(0).isUnit())) && tagtype == TAG_TYPE_TERMINAL && po.use_unicode_signs && CHILD(1).isInteger() && CHILD(1).number().isNonNegative() && CHILD(1).number() <= 9) {
+				if(!b_units && colorize && tagtype == TAG_TYPE_TERMINAL) print_str += (colorize == 2 ? "\033[0;96m" : "\033[0;36m");
+				switch(CHILD(1).number().intValue()) {
+					case 2: {print_str += SIGN_POWER_2; break;}
+					case 3: {print_str += SIGN_POWER_3; break;}
+					case 4: {print_str += SIGN_POWER_4; break;}
+					case 5: {print_str += SIGN_POWER_5; break;}
+					case 6: {print_str += SIGN_POWER_6; break;}
+					case 7: {print_str += SIGN_POWER_7; break;}
+					case 8: {print_str += SIGN_POWER_8; break;}
+					case 9: {print_str += SIGN_POWER_9; break;}
+					case 0: {print_str += SIGN_POWER_0; break;}
+					case 1: {print_str += SIGN_POWER_1; break;}
+				}
+				if(colorize && tagtype == TAG_TYPE_TERMINAL) print_str += "\033[0m";
+			} else {
+				po2.use_unicode_signs = po.use_unicode_signs;
+				po2.show_ending_zeroes = false;
+				bool b_sup = ips_n.power_depth == 0 && format && tagtype == TAG_TYPE_HTML;
+				if(b_sup && b_units) {
+					print_str += "<sup>";
+					b_sup = false;
+					if(ips_n.power_depth < 0) ips_n.power_depth = 1;
+					else ips_n.power_depth++;
+					if(po2.base == BASE_TIME) po2.base = 10;
+					print_str += CHILD(1).print(po2, format, 0, tagtype, ips_n);
+					print_str += "</sup>";
+				} else if(!b_sup) {
+					print_str += "^";
+					if(ips_n.power_depth < 0) ips_n.power_depth = 1;
+					else ips_n.power_depth++;
+					ips_n.wrap = CHILD(1).needsParenthesis(po, ips_n, *this, 2, true, true);
+					print_str += CHILD(1).print(po2, format, b_units ? 0 : colorize, tagtype, ips_n);
+				}
+				if(b_units && colorize && tagtype == TAG_TYPE_TERMINAL) print_str += "\033[0m";
+				else if(b_units && colorize && tagtype == TAG_TYPE_HTML) print_str += "</span>";
+				if(b_sup) {
+					ips_n.wrap = false;
+					print_str += "<sup>";
+					if(ips_n.power_depth < 0) ips_n.power_depth = 1;
+					else ips_n.power_depth++;
+					print_str += CHILD(1).print(po2, format, b_units ? 0 : colorize, tagtype, ips_n);
+					print_str += "</sup>";
+				}
 			}
 			break;
 		}
@@ -4274,7 +4535,8 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 			break;
 		}
 	}
-	if(CALCULATOR->aborted()) {
+	if(CALCULATOR->aborted() && print_str.find(CALCULATOR->abortedMessage()) != string::npos) {
+		print_str = "";
 		if(colorize && tagtype == TAG_TYPE_TERMINAL) print_str += (colorize == 2 ? "\033[0;91m" : "\033[0;31m");
 		else if(colorize && tagtype == TAG_TYPE_HTML) print_str += (colorize == 2 ? "<span style=\"color:#FFAAAA\">" : "<span style=\"color:#800000\">");
 		print_str += CALCULATOR->abortedMessage();

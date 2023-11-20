@@ -294,11 +294,23 @@ GcdFunction::GcdFunction() : MathFunction("gcd", 2, -1) {
 }
 int GcdFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
 	mstruct = vargs[0];
-	MathStructure m1;
-	for(size_t i = 1; i < vargs.size(); i++) {
-		m1 = mstruct;
-		if(!MathStructure::gcd(m1, vargs[i], mstruct, eo)) {
-			return 0;
+	bool b_number = true;
+	for(size_t i = 0; i < vargs.size(); i++) {
+		if(!vargs[i].isNumber()) {
+			b_number = false;
+			break;
+		}
+	}
+	if(b_number) {
+		for(size_t i = 1; i < vargs.size(); i++) {
+			if(!mstruct.number().gcd(vargs[i].number())) return 0;
+		}
+		mstruct.numberUpdated();
+	} else {
+		MathStructure m1;
+		for(size_t i = 1; i < vargs.size(); i++) {
+			m1 = mstruct;
+			if(!MathStructure::gcd(m1, vargs[i], mstruct, eo)) return 0;
 		}
 	}
 	return 1;
@@ -310,11 +322,23 @@ LcmFunction::LcmFunction() : MathFunction("lcm", 2, -1) {
 }
 int LcmFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
 	mstruct = vargs[0];
-	MathStructure m1;
-	for(size_t i = 1; i < vargs.size(); i++) {
-		m1 = mstruct;
-		if(!MathStructure::lcm(m1, vargs[i], mstruct, eo)) {
-			return 0;
+	bool b_number = true;
+	for(size_t i = 0; i < vargs.size(); i++) {
+		if(!vargs[i].isNumber()) {
+			b_number = false;
+			break;
+		}
+	}
+	if(b_number) {
+		for(size_t i = 1; i < vargs.size(); i++) {
+			if(!mstruct.number().lcm(vargs[i].number())) return 0;
+		}
+		mstruct.numberUpdated();
+	} else {
+		MathStructure m1;
+		for(size_t i = 1; i < vargs.size(); i++) {
+			m1 = mstruct;
+			if(!MathStructure::lcm(m1, vargs[i], mstruct, eo)) return 0;
 		}
 	}
 	return 1;
@@ -991,11 +1015,28 @@ RemFunction::RemFunction() : MathFunction("rem", 2) {
 bool powmod(Number &nr, const Number &base, const Number &exp, const Number &div, bool b_rem) {
 	mpz_t i;
 	mpz_init(i);
+	if(exp.isNegative()) {
+		mpz_gcd(i, mpq_numref(base.internalRational()), mpq_numref(div.internalRational()));
+		if(mpz_cmp_ui(i, 1) != 0) {
+			mpz_clear(i);
+			return false;
+		}
+	}
 	mpz_powm(i, mpq_numref(base.internalRational()), mpq_numref(exp.internalRational()), mpq_numref(div.internalRational()));
 	nr.setInternal(i);
 	if(b_rem && base.isNegative() && exp.isOdd()) nr -= div;
 	mpz_clear(i);
 	return true;
+}
+PowerModFunction::PowerModFunction() : MathFunction("powmod", 3) {
+	setArgumentDefinition(1, new IntegerArgument(""));
+	setArgumentDefinition(2, new IntegerArgument(""));
+	setArgumentDefinition(3, new IntegerArgument("", ARGUMENT_MIN_MAX_NONZERO));
+}
+int PowerModFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
+	mstruct.clear();
+	if(!powmod(mstruct.number(), vargs[0].number(), vargs[1].number(), vargs[2].number(), false)) return 0;
+	return 1;
 }
 void remove_overflow_message() {
 	vector<CalculatorMessage> message_vector;
@@ -1017,7 +1058,7 @@ int RemFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 			FR_FUNCTION_2c1
 		}
 	} else if(!vargs[0].isNumber()) {
-		if(vargs[0].isPower() && vargs[0][0].isInteger() && vargs[0][1].isInteger() && !vargs[0][0].number().isZero()) {
+		if(vargs[0].isPower() && vargs[0][0].isInteger() && vargs[0][1].isInteger() && vargs[0][1].number().isPositive() && !vargs[0][0].number().isZero()) {
 			Number nr;
 			if(powmod(nr, vargs[0][0].number(), vargs[0][1].number(), vargs[1].number(), true)) {mstruct = nr; return 1;}
 		}
@@ -1030,7 +1071,7 @@ int RemFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 		} else {
 			mstruct.eval(eo);
 		}
-		if(mstruct.isPower() && mstruct[0].isInteger() && mstruct[1].isInteger() && !mstruct[0].number().isZero()) {
+		if(mstruct.isPower() && mstruct[0].isInteger() && mstruct[1].isInteger() && mstruct[1].number().isPositive()&& !mstruct[0].number().isZero()) {
 			Number nr;
 			if(powmod(nr, mstruct[0].number(), mstruct[1].number(), vargs[1].number(), true)) {
 				remove_overflow_message();
@@ -1086,7 +1127,7 @@ int ModFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 			FR_FUNCTION_2c1
 		}
 	} else if(!vargs[0].isNumber()) {
-		if(vargs[0].isPower() && vargs[0][0].isInteger() && vargs[0][1].isInteger() && !vargs[0][0].number().isZero()) {
+		if(vargs[0].isPower() && vargs[0][0].isInteger() && vargs[0][1].isInteger() && vargs[0][1].number().isPositive() && !vargs[0][0].number().isZero()) {
 			Number nr;
 			if(powmod(nr, vargs[0][0].number(), vargs[0][1].number(), vargs[1].number(), false)) {mstruct = nr; return 1;}
 		}
@@ -1099,7 +1140,7 @@ int ModFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 		} else {
 			mstruct.eval(eo);
 		}
-		if(mstruct.isPower() && mstruct[0].isInteger() && mstruct[1].isInteger() && !mstruct[0].number().isZero()) {
+		if(mstruct.isPower() && mstruct[0].isInteger() && mstruct[1].isInteger() && mstruct[1].number().isPositive() && !mstruct[0].number().isZero()) {
 			Number nr;
 			if(powmod(nr, mstruct[0].number(), mstruct[1].number(), vargs[1].number(), false)) {
 				remove_overflow_message();
@@ -2013,15 +2054,11 @@ int ArgFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 	if(!mstruct.isNumber()) {
 		if(mstruct.representsPositive(true)) {
 			mstruct.clear();
+			if(NO_DEFAULT_ANGLE_UNIT(eo.parse_options.angle_unit)) mstruct *= CALCULATOR->getRadUnit();
 			return 1;
 		}
 		if(mstruct.representsNegative(true)) {
-			switch(eo.parse_options.angle_unit) {
-				case ANGLE_UNIT_DEGREES: {mstruct.set(180, 1, 0); break;}
-				case ANGLE_UNIT_GRADIANS: {mstruct.set(200, 1, 0); break;}
-				case ANGLE_UNIT_RADIANS: {mstruct.set(CALCULATOR->getVariableById(VARIABLE_ID_PI)); break;}
-				default: {mstruct.set(CALCULATOR->getVariableById(VARIABLE_ID_PI)); if(CALCULATOR->getRadUnit()) mstruct *= CALCULATOR->getRadUnit();}
-			}
+			set_fraction_of_turn(mstruct, eo, 1, 2);
 			return 1;
 		}
 		if(!msave.isZero()) {
@@ -2077,12 +2114,6 @@ int ArgFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 				return 1;
 			}
 		}
-		if(mstruct.isPower() && mstruct[0].representsNonZero() && mstruct[1].representsInteger()) {
-			mstruct.setType(STRUCT_MULTIPLICATION);
-			mstruct[0].transform(STRUCT_FUNCTION);
-			mstruct[0].setFunction(this);
-			return 1;
-		}
 		if(mstruct.isPower() && mstruct[0].isVariable() && mstruct[0].variable()->id() == VARIABLE_ID_E && mstruct[1].isNumber() && mstruct[1].number().hasImaginaryPart() && !mstruct[1].number().hasRealPart()) {
 			CALCULATOR->beginTemporaryEnableIntervalArithmetic();
 			if(CALCULATOR->usesIntervalArithmetic()) {
@@ -2134,15 +2165,11 @@ int ArgFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 				if(cr_im == COMPARISON_RESULT_EQUAL) {
 					if(cr_re == COMPARISON_RESULT_LESS) {
 						mstruct.clear();
+						if(NO_DEFAULT_ANGLE_UNIT(eo.parse_options.angle_unit)) mstruct *= CALCULATOR->getRadUnit();
 						CALCULATOR->endTemporaryStopMessages(true);
 						return 1;
 					} else if(cr_re == COMPARISON_RESULT_GREATER) {
-						switch(eo.parse_options.angle_unit) {
-							case ANGLE_UNIT_DEGREES: {mstruct.set(180, 1, 0); break;}
-							case ANGLE_UNIT_GRADIANS: {mstruct.set(200, 1, 0); break;}
-							case ANGLE_UNIT_RADIANS: {mstruct.set(CALCULATOR->getVariableById(VARIABLE_ID_PI)); break;}
-							default: {mstruct.set(CALCULATOR->getVariableById(VARIABLE_ID_PI)); if(CALCULATOR->getRadUnit()) mstruct *= CALCULATOR->getRadUnit();}
-						}
+						set_fraction_of_turn(mstruct, eo, 1, 2);
 						CALCULATOR->endTemporaryStopMessages(true);
 						return 1;
 					}
@@ -2152,12 +2179,7 @@ int ArgFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 						if(cr_im == COMPARISON_RESULT_LESS) i_sgn = 1;
 						else if(cr_im == COMPARISON_RESULT_GREATER) i_sgn = -1;
 						if(i_sgn != 0) {
-							switch(eo.parse_options.angle_unit) {
-								case ANGLE_UNIT_DEGREES: {mstruct.set(90, 1, 0); break;}
-								case ANGLE_UNIT_GRADIANS: {mstruct.set(100, 1, 0); break;}
-								case ANGLE_UNIT_RADIANS: {mstruct.set(CALCULATOR->getVariableById(VARIABLE_ID_PI)); mstruct.multiply(nr_half); break;}
-								default: {mstruct.set(CALCULATOR->getVariableById(VARIABLE_ID_PI)); mstruct.multiply(nr_half); if(CALCULATOR->getRadUnit()) mstruct *= CALCULATOR->getRadUnit();}
-							}
+							set_fraction_of_turn(mstruct, eo, 1, 4);
 							if(i_sgn < 0) mstruct.negate();
 							CALCULATOR->endTemporaryStopMessages(true);
 							return 1;
@@ -2166,23 +2188,13 @@ int ArgFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 						if(cr_im == COMPARISON_RESULT_GREATER) {
 							m_im.divide(m_re);
 							mstruct.set(CALCULATOR->getFunctionById(FUNCTION_ID_ATAN), &m_im, NULL);
-							switch(eo.parse_options.angle_unit) {
-								case ANGLE_UNIT_DEGREES: {mstruct.add(-180); break;}
-								case ANGLE_UNIT_GRADIANS: {mstruct.add(-200); break;}
-								case ANGLE_UNIT_RADIANS: {mstruct.subtract(CALCULATOR->getVariableById(VARIABLE_ID_PI)); break;}
-								default: {MathStructure msub(CALCULATOR->getVariableById(VARIABLE_ID_PI)); if(CALCULATOR->getRadUnit()) msub *= CALCULATOR->getRadUnit(); mstruct.subtract(msub);}
-							}
+							add_fraction_of_turn(mstruct, eo, -1, 2);
 							CALCULATOR->endTemporaryStopMessages(true);
 							return 1;
 						} else if(cr_im == COMPARISON_RESULT_LESS) {
 							m_im.divide(m_re);
 							mstruct.set(CALCULATOR->getFunctionById(FUNCTION_ID_ATAN), &m_im, NULL);
-							switch(eo.parse_options.angle_unit) {
-								case ANGLE_UNIT_DEGREES: {mstruct.add(180); break;}
-								case ANGLE_UNIT_GRADIANS: {mstruct.add(200); break;}
-								case ANGLE_UNIT_RADIANS: {mstruct.add(CALCULATOR->getVariableById(VARIABLE_ID_PI)); break;}
-								default: {MathStructure madd(CALCULATOR->getVariableById(VARIABLE_ID_PI)); if(CALCULATOR->getRadUnit()) madd *= CALCULATOR->getRadUnit(); mstruct.add(madd);}
-							}
+							add_fraction_of_turn(mstruct, eo, 1, 2);
 							CALCULATOR->endTemporaryStopMessages(true);
 							return 1;
 						}
@@ -2211,51 +2223,37 @@ int ArgFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 				return -1;
 			}
 			if(mstruct.number().isNegative()) {
-				switch(eo.parse_options.angle_unit) {
-					case ANGLE_UNIT_DEGREES: {mstruct.set(180, 1, 0); break;}
-					case ANGLE_UNIT_GRADIANS: {mstruct.set(200, 1, 0); break;}
-					case ANGLE_UNIT_RADIANS: {mstruct.set(CALCULATOR->getVariableById(VARIABLE_ID_PI)); break;}
-					default: {mstruct.set(CALCULATOR->getVariableById(VARIABLE_ID_PI)); if(CALCULATOR->getRadUnit()) mstruct *= CALCULATOR->getRadUnit();}
-				}
+				set_fraction_of_turn(mstruct, eo, 1, 2);
 			} else {
 				mstruct.clear();
+				if(NO_DEFAULT_ANGLE_UNIT(eo.parse_options.angle_unit)) mstruct *= CALCULATOR->getRadUnit();
 			}
 		} else if(!mstruct.number().hasRealPart() && mstruct.number().imaginaryPartIsNonZero()) {
 			bool b_neg = mstruct.number().imaginaryPartIsNegative();
-			switch(eo.parse_options.angle_unit) {
-				case ANGLE_UNIT_DEGREES: {mstruct.set(90, 1, 0); break;}
-				case ANGLE_UNIT_GRADIANS: {mstruct.set(100, 1, 0); break;}
-				case ANGLE_UNIT_RADIANS: {mstruct.set(CALCULATOR->getVariableById(VARIABLE_ID_PI)); mstruct.multiply(nr_half); break;}
-				default: {mstruct.set(CALCULATOR->getVariableById(VARIABLE_ID_PI)); mstruct.multiply(nr_half); if(CALCULATOR->getRadUnit()) mstruct *= CALCULATOR->getRadUnit();}
-			}
+			set_fraction_of_turn(mstruct, eo, 1, 4);
 			if(b_neg) mstruct.negate();
 		} else if(!msave.isZero()) {
 			mstruct = msave;
 			return -1;
-		} else if(!mstruct.number().realPartIsNonZero()) {
-			FR_FUNCTION(arg)
+		} else if(!mstruct.number().realPartIsNonZero() || (!mstruct.number().imaginaryPartIsNonZero() && mstruct.number().realPartIsNegative())) {
+			Number nr(mstruct.number());
+			if(!nr.arg() || (eo.approximation == APPROXIMATION_EXACT && nr.isApproximate() && !mstruct.isApproximate()) || (!eo.allow_complex && nr.isComplex() && !mstruct.number().isComplex()) || (!eo.allow_infinite && nr.includesInfinity() && !mstruct.number().includesInfinity())) {
+				return -1;
+			} else {
+				mstruct.set(nr);
+				multiply_by_fraction_of_radian(mstruct, eo, 1, 1);
+				return 1;
+			}
 		} else {
 			MathStructure new_nr(mstruct.number().imaginaryPart());
 			if(!new_nr.number().divide(mstruct.number().realPart())) return -1;
 			if(mstruct.number().realPartIsNegative()) {
 				if(mstruct.number().imaginaryPartIsNegative()) {
 					mstruct.set(CALCULATOR->getFunctionById(FUNCTION_ID_ATAN), &new_nr, NULL);
-					switch(eo.parse_options.angle_unit) {
-						case ANGLE_UNIT_DEGREES: {mstruct.add(-180); break;}
-						case ANGLE_UNIT_GRADIANS: {mstruct.add(-200); break;}
-						case ANGLE_UNIT_RADIANS: {mstruct.subtract(CALCULATOR->getVariableById(VARIABLE_ID_PI)); break;}
-						default: {MathStructure msub(CALCULATOR->getVariableById(VARIABLE_ID_PI)); if(CALCULATOR->getRadUnit()) msub *= CALCULATOR->getRadUnit(); mstruct.subtract(msub);}
-					}
-				} else if(mstruct.number().imaginaryPartIsNonNegative()) {
-					mstruct.set(CALCULATOR->getFunctionById(FUNCTION_ID_ATAN), &new_nr, NULL);
-					switch(eo.parse_options.angle_unit) {
-						case ANGLE_UNIT_DEGREES: {mstruct.add(180); break;}
-						case ANGLE_UNIT_GRADIANS: {mstruct.add(200); break;}
-						case ANGLE_UNIT_RADIANS: {mstruct.add(CALCULATOR->getVariableById(VARIABLE_ID_PI)); break;}
-						default: {MathStructure madd(CALCULATOR->getVariableById(VARIABLE_ID_PI)); if(CALCULATOR->getRadUnit()) madd *= CALCULATOR->getRadUnit(); mstruct.add(madd);}
-					}
+					add_fraction_of_turn(mstruct, eo, -1, 2);
 				} else {
-					FR_FUNCTION(arg)
+					mstruct.set(CALCULATOR->getFunctionById(FUNCTION_ID_ATAN), &new_nr, NULL);
+					add_fraction_of_turn(mstruct, eo, 1, 2);
 				}
 			} else {
 				mstruct.set(CALCULATOR->getFunctionById(FUNCTION_ID_ATAN), &new_nr, NULL);
@@ -2300,7 +2298,7 @@ IS_NUMBER_FUNCTION(IsIntegerFunction, isInteger)
 IS_NUMBER_FUNCTION(IsRealFunction, isReal)
 IS_NUMBER_FUNCTION(IsRationalFunction, isRational)
 
-IEEE754FloatFunction::IEEE754FloatFunction() : MathFunction("float", 1, 3) {
+IEEE754FloatFunction::IEEE754FloatFunction() : MathFunction("float", 1, 4) {
 	Argument *arg = new TextArgument();
 	arg->setHandleVector(true);
 	setArgumentDefinition(1, arg);
@@ -2311,12 +2309,15 @@ IEEE754FloatFunction::IEEE754FloatFunction() : MathFunction("float", 1, 3) {
 	setDefaultValue(2, "32");
 	setArgumentDefinition(3,  new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_ULONG));
 	setDefaultValue(3, "0");
-	setCondition("\\z<\\y-1");
+	setArgumentDefinition(4,  new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_ULONG));
+	setDefaultValue(4, "0");
+	setCondition("\\z<\\y-1 && \\a<\\y");
 }
 int IEEE754FloatFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
 	string sbin = vargs[0].symbol();
 	unsigned int bits = vargs[1].number().uintValue();
 	unsigned int expbits = vargs[2].number().uintValue();
+	unsigned int sgnpos = vargs[3].number().uintValue();
 	remove_blanks(sbin);
 	if(sbin.find_first_not_of("01") != string::npos) {
 		MathStructure m;
@@ -2333,13 +2334,13 @@ int IEEE754FloatFunction::calculate(MathStructure &mstruct, const MathStructure 
 		remove_blanks(sbin);
 	}
 	Number nr;
-	int ret = from_float(nr, sbin, bits, expbits);
+	int ret = from_float(nr, sbin, bits, expbits, sgnpos);
 	if(ret == 0) return 0;
 	if(ret < 0) mstruct.setUndefined();
 	else mstruct = nr;
 	return 1;
 }
-IEEE754FloatBitsFunction::IEEE754FloatBitsFunction() : MathFunction("floatBits", 1, 3) {
+IEEE754FloatBitsFunction::IEEE754FloatBitsFunction() : MathFunction("floatBits", 1, 4) {
 	NumberArgument *arg = new NumberArgument("", ARGUMENT_MIN_MAX_NONE, true, true);
 	arg->setComplexAllowed(false);
 	arg->setHandleVector(true);
@@ -2351,12 +2352,15 @@ IEEE754FloatBitsFunction::IEEE754FloatBitsFunction() : MathFunction("floatBits",
 	setDefaultValue(2, "32");
 	setArgumentDefinition(3,  new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_ULONG));
 	setDefaultValue(3, "0");
-	setCondition("\\z<\\y-1");
+	setArgumentDefinition(4,  new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_ULONG));
+	setDefaultValue(4, "0");
+	setCondition("\\z<\\y-1 && \\a<\\y");
 }
 int IEEE754FloatBitsFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions&) {
 	unsigned int bits = vargs[1].number().uintValue();
 	unsigned int expbits = vargs[2].number().uintValue();
-	string sbin = to_float(vargs[0].number(), bits, expbits);
+	unsigned int sgnpos = vargs[3].number().uintValue();
+	string sbin = to_float(vargs[0].number(), bits, expbits, sgnpos);
 	if(sbin.empty()) return 0;
 	ParseOptions pa;
 	pa.base = BASE_BINARY;
@@ -2366,7 +2370,7 @@ int IEEE754FloatBitsFunction::calculate(MathStructure &mstruct, const MathStruct
 	mstruct = nr;
 	return 1;
 }
-IEEE754FloatComponentsFunction::IEEE754FloatComponentsFunction() : MathFunction("floatParts", 1, 3) {
+IEEE754FloatComponentsFunction::IEEE754FloatComponentsFunction() : MathFunction("floatParts", 1, 4) {
 	NumberArgument *arg = new NumberArgument("", ARGUMENT_MIN_MAX_NONE, true, true);
 	arg->setComplexAllowed(false);
 	arg->setHandleVector(true);
@@ -2378,13 +2382,16 @@ IEEE754FloatComponentsFunction::IEEE754FloatComponentsFunction() : MathFunction(
 	setDefaultValue(2, "32");
 	setArgumentDefinition(3,  new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_ULONG));
 	setDefaultValue(3, "0");
-	setCondition("\\z<\\y-1");
+	setArgumentDefinition(4,  new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_ULONG));
+	setDefaultValue(4, "0");
+	setCondition("\\z<\\y-1 && \\a<\\y");
 }
 int IEEE754FloatComponentsFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions&) {
 	unsigned int bits = vargs[1].number().uintValue();
 	unsigned int expbits = vargs[2].number().uintValue();
+	unsigned int sgnpos = vargs[3].number().uintValue();
 	if(expbits == 0) expbits = standard_expbits(bits);
-	string sbin = to_float(vargs[0].number(), bits, expbits);
+	string sbin = to_float(vargs[0].number(), bits, expbits, sgnpos);
 	if(sbin.empty()) return 0;
 	Number sign, exponent, significand;
 	if(sbin[0] == '0') sign = 1;
@@ -2408,7 +2415,7 @@ int IEEE754FloatComponentsFunction::calculate(MathStructure &mstruct, const Math
 	mstruct.addChild(significand);
 	return 1;
 }
-IEEE754FloatValueFunction::IEEE754FloatValueFunction() : MathFunction("floatValue", 1, 3) {
+IEEE754FloatValueFunction::IEEE754FloatValueFunction() : MathFunction("floatValue", 1, 4) {
 	NumberArgument *arg = new NumberArgument("", ARGUMENT_MIN_MAX_NONE, true, true);
 	arg->setComplexAllowed(false);
 	arg->setHandleVector(true);
@@ -2420,20 +2427,23 @@ IEEE754FloatValueFunction::IEEE754FloatValueFunction() : MathFunction("floatValu
 	setDefaultValue(2, "32");
 	setArgumentDefinition(3,  new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_ULONG));
 	setDefaultValue(3, "0");
-	setCondition("\\z<\\y-1");
+	setArgumentDefinition(4,  new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_ULONG));
+	setDefaultValue(4, "0");
+	setCondition("\\z<\\y-1 && \\a<\\y");
 }
 int IEEE754FloatValueFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions&) {
 	unsigned int bits = vargs[1].number().uintValue();
 	unsigned int expbits = vargs[2].number().uintValue();
-	string sbin = to_float(vargs[0].number(), bits, expbits);
+	unsigned int sgnpos = vargs[3].number().uintValue();
+	string sbin = to_float(vargs[0].number(), bits, expbits, sgnpos);
 	if(sbin.empty()) return 0;
 	Number nr;
-	int ret = from_float(nr, sbin, bits, expbits);
+	int ret = from_float(nr, sbin, bits, expbits, sgnpos);
 	if(ret == 0) mstruct.setUndefined();
 	else mstruct = nr;
 	return 1;
 }
-IEEE754FloatErrorFunction::IEEE754FloatErrorFunction() : MathFunction("floatError", 1, 3) {
+IEEE754FloatErrorFunction::IEEE754FloatErrorFunction() : MathFunction("floatError", 1, 4) {
 	NumberArgument *arg = new NumberArgument("", ARGUMENT_MIN_MAX_NONE, true, true);
 	arg->setComplexAllowed(false);
 	arg->setHandleVector(true);
@@ -2445,15 +2455,18 @@ IEEE754FloatErrorFunction::IEEE754FloatErrorFunction() : MathFunction("floatErro
 	setDefaultValue(2, "32");
 	setArgumentDefinition(3,  new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_ULONG));
 	setDefaultValue(3, "0");
-	setCondition("\\z<\\y-1");
+	setArgumentDefinition(4,  new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_ULONG));
+	setDefaultValue(4, "0");
+	setCondition("\\z<\\y-1 && \\a<\\y");
 }
 int IEEE754FloatErrorFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions&) {
 	unsigned int bits = vargs[1].number().uintValue();
 	unsigned int expbits = vargs[2].number().uintValue();
-	string sbin = to_float(vargs[0].number(), bits, expbits);
+	unsigned int sgnpos = vargs[3].number().uintValue();
+	string sbin = to_float(vargs[0].number(), bits, expbits, sgnpos);
 	if(sbin.empty()) return 0;
 	Number nr;
-	int ret = from_float(nr, sbin, bits, expbits);
+	int ret = from_float(nr, sbin, bits, expbits, sgnpos);
 	if(ret == 0) return 0;
 	if(ret < 0 || (vargs[0].number().isInfinite() && nr.isInfinite())) {
 		mstruct.clear();

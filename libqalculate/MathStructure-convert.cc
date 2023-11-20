@@ -267,7 +267,7 @@ bool MathStructure::syncUnits(bool sync_nonlinear_relations, bool *found_nonline
 bool has_approximate_relation_to_base(Unit *u, bool do_intervals) {
 	if(u->subtype() == SUBTYPE_ALIAS_UNIT) {
 		if(((AliasUnit*) u)->isApproximate()) return do_intervals;
-		if(((AliasUnit*) u)->expression().find_first_not_of(NUMBER_ELEMENTS EXPS) != string::npos && !((AliasUnit*) u)->hasNonlinearExpression()) return true;
+		if((((AliasUnit*) u)->expression().find_first_not_of(NUMBER_ELEMENTS EXPS MINUS PLUS DIVISION MULTIPLICATION) != string::npos || ((AliasUnit*) u)->expression().find("+/-") != string::npos) && !((AliasUnit*) u)->hasNonlinearExpression()) return true;
 		return has_approximate_relation_to_base(((AliasUnit*) u)->firstBaseUnit());
 	} else if(u->subtype() == SUBTYPE_COMPOSITE_UNIT) {
 		for(size_t i = 1; i <= ((CompositeUnit*) u)->countUnits(); i++) {
@@ -878,7 +878,7 @@ bool MathStructure::convert(Unit *u, bool convert_nonlinear_relations, bool *fou
 					if(CHILD(b_c).isPower()) {
 						if(CHILD(b_c)[0].unit()->baseUnit() != u->baseUnit()) {
 							if(CHILD(b_c)[0].unit()->subtype() != SUBTYPE_BASE_UNIT && (CHILD(b_c)[0].unit()->subtype() != SUBTYPE_ALIAS_UNIT || ((AliasUnit*) CHILD(b_c)[0].unit())->firstBaseUnit()->subtype() != SUBTYPE_COMPOSITE_UNIT)) {
-								convertToBaseUnits(convert_nonlinear_relations, found_nonlinear_relations, calculate_new_functions, feo);
+								if(!convertToBaseUnits(convert_nonlinear_relations, found_nonlinear_relations, calculate_new_functions, feo)) return false;
 							} else {
 								return false;
 							}
@@ -891,7 +891,7 @@ bool MathStructure::convert(Unit *u, bool convert_nonlinear_relations, bool *fou
 					} else {
 						if(CHILD(b_c).unit()->baseUnit() != u->baseUnit()) {
 							if(CHILD(b_c).unit()->subtype() != SUBTYPE_BASE_UNIT && (CHILD(b_c).unit()->subtype() != SUBTYPE_ALIAS_UNIT || ((AliasUnit*) CHILD(b_c).unit())->firstBaseUnit()->subtype() != SUBTYPE_COMPOSITE_UNIT)) {
-								convertToBaseUnits(convert_nonlinear_relations, found_nonlinear_relations, calculate_new_functions, feo);
+								if(!convertToBaseUnits(convert_nonlinear_relations, found_nonlinear_relations, calculate_new_functions, feo)) return false;
 							} else {
 								return false;
 							}
@@ -944,7 +944,7 @@ bool MathStructure::convert(Unit *u, bool convert_nonlinear_relations, bool *fou
 					if(convert_nonlinear_relations) {
 						if(CHILD(0).unit()->baseUnit() != u->baseUnit()) {
 							if(CHILD(0).unit()->subtype() != SUBTYPE_BASE_UNIT && (CHILD(0).unit()->subtype() != SUBTYPE_ALIAS_UNIT || ((AliasUnit*) CHILD(0).unit())->firstBaseUnit()->subtype() != SUBTYPE_COMPOSITE_UNIT)) {
-								convertToBaseUnits(convert_nonlinear_relations, found_nonlinear_relations, calculate_new_functions, feo);
+								if(!convertToBaseUnits(convert_nonlinear_relations, found_nonlinear_relations, calculate_new_functions, feo)) return false;
 							} else {
 								return false;
 							}

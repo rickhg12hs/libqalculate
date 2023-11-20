@@ -300,7 +300,7 @@ MathStructure Calculator::convert(const MathStructure &mstruct, KnownVariable *t
 	size_t n_messages = messages.size();
 	if(!to_var->unit().empty() && to_var->isExpression()) {
 		int b = mstruct.containsRepresentativeOfType(STRUCT_UNIT, true, true);
-		if(b != 0 || (b < 0 && b_var_units)) {
+		if(b > 0 || (b < 0 && b_var_units)) {
 			beginTemporaryStopMessages();
 			CompositeUnit cu("", "temporary_composite_convert", "", to_var->unit());
 			if(!CALCULATOR->endTemporaryStopMessages() && cu.countUnits() > 0) {
@@ -330,6 +330,9 @@ MathStructure Calculator::convert(const MathStructure &mstruct, KnownVariable *t
 	MathStructure mstruct_new(mstruct);
 	mstruct_new /= to_var->get();
 	mstruct_new.eval(eo);
+	if((eo.auto_post_conversion == POST_CONVERSION_OPTIMAL || eo.auto_post_conversion == POST_CONVERSION_OPTIMAL_SI) && mstruct_new.containsType(STRUCT_UNIT, true)) {
+		mstruct_new.set(CALCULATOR->convertToOptimalUnit(mstruct_new, eo, false));
+	}
 	mstruct_new.multiply(to_var, true);
 	cleanMessages(mstruct, n_messages + 1);
 	return mstruct_new;
@@ -349,35 +352,39 @@ long int count_unit_powers(const MathStructure &m) {
 }
 void fix_to_struct(MathStructure &m) {
 	if(m.isPower() && m[0].isUnit()) {
-		if(m[0].prefix() == NULL && m[0].unit()->referenceName() == "g") {
-			m[0].setPrefix(CALCULATOR->getOptimalDecimalPrefix(3));
-		} else if(m[0].unit() == CALCULATOR->getUnitById(UNIT_ID_EURO)) {
+		if(m[0].unit() == CALCULATOR->getUnitById(UNIT_ID_EURO)) {
 			Unit *u = CALCULATOR->getLocalCurrency();
 			if(u) m[0].setUnit(u);
 		}
+		if(m[0].prefix() == NULL && m[0].unit()->defaultPrefix() != 0) {
+			m[0].setPrefix(CALCULATOR->getExactDecimalPrefix(m[0].unit()->defaultPrefix()));
+		}
 	} else if(m.isUnit()) {
-		if(m.prefix() == NULL && m.unit()->referenceName() == "g") {
-			m.setPrefix(CALCULATOR->getOptimalDecimalPrefix(3));
-		} else if(m.unit() == CALCULATOR->getUnitById(UNIT_ID_EURO)) {
+		if(m.unit() == CALCULATOR->getUnitById(UNIT_ID_EURO)) {
 			Unit *u = CALCULATOR->getLocalCurrency();
 			if(u) m.setUnit(u);
+		}
+		if(m.prefix() == NULL && m.unit()->defaultPrefix() != 0) {
+			m.setPrefix(CALCULATOR->getExactDecimalPrefix(m.unit()->defaultPrefix()));
 		}
 	} else {
 		for(size_t i = 0; i < m.size();) {
 			if(m[i].isUnit()) {
-				if(m[i].prefix() == NULL && m[i].unit()->referenceName() == "g") {
-					m[i].setPrefix(CALCULATOR->getOptimalDecimalPrefix(3));
-				} else if(m[i].unit() == CALCULATOR->getUnitById(UNIT_ID_EURO)) {
+				if(m[i].unit() == CALCULATOR->getUnitById(UNIT_ID_EURO)) {
 					Unit *u = CALCULATOR->getLocalCurrency();
 					if(u) m[i].setUnit(u);
 				}
+				if(m[i].prefix() == NULL && m[i].unit()->defaultPrefix() != 0) {
+					m[i].setPrefix(CALCULATOR->getExactDecimalPrefix(m[i].unit()->defaultPrefix()));
+				}
 				i++;
 			} else if(m[i].isPower() && m[i][0].isUnit()) {
-				if(m[i][0].prefix() == NULL && m[i][0].unit()->referenceName() == "g") {
-					m[i][0].setPrefix(CALCULATOR->getOptimalDecimalPrefix(3));
-				} else if(m[i][0].unit() == CALCULATOR->getUnitById(UNIT_ID_EURO)) {
+				if(m[i][0].unit() == CALCULATOR->getUnitById(UNIT_ID_EURO)) {
 					Unit *u = CALCULATOR->getLocalCurrency();
 					if(u) m[i][0].setUnit(u);
+				}
+				if(m[i][0].prefix() == NULL && m[i][0].unit()->defaultPrefix() != 0) {
+					m[i][0].setPrefix(CALCULATOR->getExactDecimalPrefix(m[i][0].unit()->defaultPrefix()));
 				}
 				i++;
 			} else {
@@ -420,21 +427,172 @@ Unit *find_ounce(const MathStructure &m) {
 	}
 	return NULL;
 }
+
+bool contains_angle_returning_function(const MathStructure &m) {
+	if(m.isFunction() && (m.function()->id() == FUNCTION_ID_ATAN || m.function()->id() == FUNCTION_ID_ACOS || m.function()->id() == FUNCTION_ID_ASIN || m.function()->id() == FUNCTION_ID_ARG || m.function()->id() == FUNCTION_ID_ATAN2 || m.function()->id() == FUNCTION_ID_RADIANS_TO_DEFAULT_ANGLE_UNIT)) return true;
+	if(m.isFunction() && m.function()->subtype() == SUBTYPE_USER_FUNCTION) {
+		UserFunction *f = (UserFunction*) m.function();
+		if(f->formula().find("arctan") != string::npos || f->formula().find("arccos") != string::npos || f->formula().find("arcsin") != string::npos || f->formula().find("atan(") != string::npos || f->formula().find("acos(") != string::npos || f->formula().find("asin(") != string::npos) return true;
+	}
+	if(m.isVariable() && m.variable()->isKnown()) return contains_angle_returning_function(((KnownVariable*) m.variable())->get());
+	for(size_t i = 0; i < m.size(); i++) {
+		if(contains_angle_returning_function(m[i])) return true;
+	}
+	return false;
+}
+
+void contains_angle_ratio_b(const MathStructure &m, bool &num, bool &den, bool in_den) {
+	if(m.isUnit() && m.unit()->baseUnit()->referenceName() == "m") {
+		if(in_den) den = true;
+		else num = true;
+	}
+	if(num && den) return;
+	if(m.isPower()) {
+		if(m[1].representsNegative()) in_den = !in_den;
+		contains_angle_ratio_b(m[0], num, den, in_den);
+	} else {
+		for(size_t i = 0; i < m.size(); i++) {
+			if((i == 0 && m.isInverse()) || (i == 1 && m.isDivision())) in_den = !in_den;
+			contains_angle_ratio_b(m[i], num, den, in_den);
+			if(num && den) return;
+		}
+	}
+}
+bool contains_angle_ratio(const MathStructure &m) {
+	if(m.isAddition()) {
+		for(size_t i = 0; i < m.size(); i++) {
+			bool num = false, den = false;
+			contains_angle_ratio_b(m[i], num, den, false);
+			if(num && den) return true;
+		}
+		return false;
+	}
+	bool num = false, den = false;
+	contains_angle_ratio_b(m, num, den, false);
+	return num && den;
+}
+
+MathStructure get_units_for_parsed_expression(const MathStructure *parsed_struct, Unit *to_unit, const EvaluationOptions &eo, const MathStructure *mstruct = NULL) {
+	CompositeUnit *cu = NULL;
+	if(to_unit->subtype() == SUBTYPE_COMPOSITE_UNIT) cu = (CompositeUnit*) to_unit;
+	if(cu && cu->countUnits() == 0) return m_zero;
+	if((mstruct && mstruct->containsType(STRUCT_UNIT, true)) || (!mstruct && parsed_struct->containsType(STRUCT_UNIT, false, true, true))) return m_zero;
+	int exp1, exp2;
+	bool b_ratio = cu && cu->countUnits() == 2 && cu->get(1, &exp1)->baseUnit() == cu->get(2, &exp2)->baseUnit() && exp1 == -exp2;
+	bool b_angle = to_unit->baseUnit() == CALCULATOR->getRadUnit() || (b_ratio && cu->get(1)->baseUnit()->referenceName() == "m" && (exp1 == 1 || exp2 == 1));
+	for(size_t i = 1; !b_angle && cu && i <= cu->countUnits(); i++) {
+		 if(cu->get(i)->baseUnit() == CALCULATOR->getRadUnit()) b_angle = true;
+	}
+	if(!b_ratio || b_angle) {
+		if(mstruct) {
+			int ct = 0;
+			ct = parsed_struct->containsType(STRUCT_UNIT, false, true, true);
+			if(!(ct == 0 || (b_angle && (ct < 0 || (parsed_struct && !contains_angle_ratio(*parsed_struct)))))) return m_zero;
+		}
+		EvaluationOptions eo2 = eo;
+		if(eo.approximation == APPROXIMATION_EXACT) eo2.approximation = APPROXIMATION_TRY_EXACT;
+		MathStructure munit(to_unit);
+		munit.unformat();
+		if(b_angle && (b_ratio || (!cu && to_unit->baseExponent() == 1) || (cu && cu->get(1, &exp1) && exp1 == 1))) {
+			munit = default_angle_unit(eo, true);
+		} else {
+			munit = CALCULATOR->convertToOptimalUnit(munit, eo2, true);
+			if(b_angle && !DEFAULT_RADIANS(eo.parse_options.angle_unit)) munit.replace(CALCULATOR->getRadUnit(), default_angle_unit(eo, true));
+			munit.unformat();
+		}
+		fix_to_struct(munit);
+		return munit;
+	}
+	return m_zero;
+}
+
+bool contains_part_of_unit(const MathStructure &m, Unit *u) {
+	if(u->subtype() == SUBTYPE_COMPOSITE_UNIT) {
+		for(size_t i = 1; i <= ((CompositeUnit*) u)->countUnits(); i++) {
+			if(contains_part_of_unit(m, ((CompositeUnit*) u)->get(i))) return true;
+		}
+		return false;
+	}
+	if(m.isUnit()) {
+		if(m.unit() == u) return true;
+		if(m.unit()->subtype() == SUBTYPE_COMPOSITE_UNIT) {
+			for(size_t i = 1; i <= ((CompositeUnit*) m.unit())->countUnits(); i++) {
+				if(((CompositeUnit*) m.unit())->get(i) == u) return true;
+			}
+		}
+	}
+	for(size_t i = 0; i < m.size(); i++) {
+		if(contains_part_of_unit(m[i], u)) return true;
+	}
+	return false;
+}
+
+void replace_hz(MathStructure &m) {
+	if(m.isUnit() && m.unit()->subtype() == SUBTYPE_ALIAS_UNIT && ((AliasUnit*) m.unit())->firstBaseExponent() == -1 && ((AliasUnit*) m.unit())->expression() == "1") {
+		m.setUnit(((AliasUnit*) m.unit())->firstBaseUnit());
+		m.raise(m_minus_one);
+	}
+	for(size_t i = 0; i < m.size(); i++) {
+		replace_hz(m[i]);
+	}
+}
+
+void test_convert(MathStructure &mstruct_new, Unit *to_unit, long int &n, bool b_pos, EvaluationOptions &eo2) {
+	if(n <= 0 || (eo2.auto_post_conversion != POST_CONVERSION_OPTIMAL && eo2.auto_post_conversion != POST_CONVERSION_OPTIMAL_SI) || CALCULATOR->aborted()) return;
+	AutoPostConversion pc = eo2.auto_post_conversion;
+	eo2.auto_post_conversion = POST_CONVERSION_NONE;
+	MathStructure mtest = CALCULATOR->convertToOptimalUnit(mstruct_new, eo2, pc == POST_CONVERSION_OPTIMAL_SI);
+	long int ntest = count_unit_powers(mtest);
+	if(!contains_part_of_unit(mtest, to_unit) && (pc == POST_CONVERSION_OPTIMAL_SI || ntest < n)) {
+		mstruct_new = mtest;
+		if(b_pos) replace_hz(mstruct_new);
+		n = ntest;
+	}
+	if(b_pos && n > 1) {
+		MathStructure mtest(mstruct_new);
+		mtest.inverse();
+		mtest.eval(eo2);
+		mtest = CALCULATOR->convertToOptimalUnit(mtest, eo2, false);
+		long int ntest = count_unit_powers(mtest);
+		if(!contains_part_of_unit(mtest, to_unit) && ntest < n) {
+			replace_hz(mtest);
+			eo2.sync_units = false;
+			mtest.inverse();
+			mtest.eval(eo2);
+			eo2.sync_units = true;
+			mstruct_new = mtest;
+			n = ntest;
+		}
+	}
+	eo2.auto_post_conversion = pc;
+}
+
 MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, const EvaluationOptions &eo, bool always_convert, bool convert_to_mixed_units, bool transform_orig, MathStructure *parsed_struct) {
 	CompositeUnit *cu = NULL;
 	if(to_unit->subtype() == SUBTYPE_COMPOSITE_UNIT) cu = (CompositeUnit*) to_unit;
 	if(cu && cu->countUnits() == 0) return mstruct;
 	int exp1, exp2;
 	bool b_ratio = cu && cu->countUnits() == 2 && cu->get(1, &exp1)->baseUnit() == cu->get(2, &exp2)->baseUnit() && exp1 == -exp2;
-	if(!b_ratio && to_unit->baseUnit() != getRadUnit() && !mstruct.containsType(STRUCT_UNIT, true)) {
-		if(transform_orig && (!parsed_struct || !parsed_struct->containsType(STRUCT_UNIT, false, true, true))) {
+	bool b_angle = to_unit->baseUnit() == getRadUnit() || (b_ratio && cu->get(1)->baseUnit()->referenceName() == "m" && (exp1 == 1 || exp2 == 1));
+	for(size_t i = 1; !b_angle && cu && i <= cu->countUnits(); i++) {
+		 if(cu->get(i)->baseUnit() == getRadUnit()) b_angle = true;
+	}
+	if((!b_ratio || b_angle) && !mstruct.containsType(STRUCT_UNIT, true)) {
+		int ct = 0;
+		if(parsed_struct) ct = parsed_struct->containsType(STRUCT_UNIT, false, true, true);
+		if(transform_orig && (ct == 0 || (b_angle && (ct < 0 || (parsed_struct && !contains_angle_ratio(*parsed_struct)))))) {
 			// multiply original value with base units
 			EvaluationOptions eo2 = eo;
 			if(eo.approximation == APPROXIMATION_EXACT) eo2.approximation = APPROXIMATION_TRY_EXACT;
 			MathStructure munit(to_unit);
 			munit.unformat();
-			munit = convertToOptimalUnit(munit, eo2, true);
-			munit.unformat();
+			if(b_angle && (b_ratio || (!cu && to_unit->baseExponent() == 1) || (cu && cu->get(1, &exp1) && exp1 == 1))) {
+				munit = default_angle_unit(eo, true);
+			} else {
+				munit = convertToOptimalUnit(munit, eo2, true);
+				if(b_angle && !DEFAULT_RADIANS(eo.parse_options.angle_unit)) munit.replace(getRadUnit(), default_angle_unit(eo, true));
+				munit.unformat();
+			}
 			fix_to_struct(munit);
 			if(!munit.isZero()) {
 				MathStructure mstruct_new(mstruct);
@@ -450,7 +608,7 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 				return convert(mstruct_new, to_unit, eo, always_convert, convert_to_mixed_units, false, NULL);
 			}
 		}
-		return mstruct;
+		if(!b_angle) return mstruct;
 	}
 	MathStructure mstruct_new(mstruct);
 	size_t n_messages = messages.size();
@@ -531,8 +689,9 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 							}
 						}
 						for(size_t i = 1; i <= cu2->countUnits(); i++) {
-							bu = cu2->get(i, &exp)->baseUnit();
+							bu = cu2->get(i, &exp);
 							exp *= bu->baseExponent();
+							bu = bu->baseUnit();
 							if((u1_type == 0 || u1_type == 6) && exp % 3 == 0 && bu->referenceName() == "m") {
 								if(u1_type == 6) {u1_type = 0; break;}
 								u1_type = 5;
@@ -732,25 +891,28 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 
 			bool b_eval = true;
 			if(to_unit != priv->u_celsius && to_unit != priv->u_fahrenheit) {
+				int exp = 1;
 				MathStructure mbak(mstruct_new);
 				mstruct_new.divide_nocopy(new MathStructure(to_unit, NULL));
 				mstruct_new.eval(eo2);
-				size_t n = count_unit_powers(mstruct_new);
-				int exp = 1;
+				eo2.mixed_units_conversion = MIXED_UNITS_CONVERSION_NONE;
+				bool b_pos = !cu, b_neg = false;
+				if(cu || to_unit->baseUnit()->subtype() == SUBTYPE_COMPOSITE_UNIT) {
+					CompositeUnit *cu2 = cu;
+					if(cu2) b_pos = true;
+					else cu2 = (CompositeUnit*) to_unit->baseUnit();
+					int exp2 = 1;
+					for(size_t i = 1; i <= cu2->countUnits(); i++) {
+						cu2->get(i, &exp2);
+						if(exp2 < 0) b_neg = true;
+						else b_pos = true;
+					}
+				}
+				long int n = count_unit_powers(mstruct_new);
+				test_convert(mstruct_new, to_unit, n, b_pos, eo2);
 				if(n > 0) {
 					MathStructure mtest(mbak);
-					bool b_pos = false, b_neg = false;
-					if(cu || to_unit->baseUnit()->subtype() == SUBTYPE_COMPOSITE_UNIT) {
-						CompositeUnit *cu2 = cu;
-						if(cu2) b_pos = true;
-						else cu2 = (CompositeUnit*) to_unit->baseUnit();
-						int exp2 = 1;
-						for(size_t i = 1; i <= cu2->countUnits(); i++) {
-							cu2->get(i, &exp2);
-							if(exp2 < 0) b_neg = true;
-							else b_pos = true;
-						}
-					}
+					MathStructure mtest2;
 					if(b_pos && b_neg) {
 						mtest.inverse();
 						mtest.divide_nocopy(new MathStructure(to_unit, NULL));
@@ -760,13 +922,27 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 							n = 0;
 						}
 					}
+					bool prio_power = transform_orig;
+					if(n > 0 && !prio_power) {
+						if(cu) {
+							for(size_t i = 1; i <= cu->countUnits(); i++) {
+								if(!cu->get(i)->isSIUnit()) {
+									prio_power = true;
+									break;
+								}
+							}
+						} else {
+							prio_power = !to_unit->isSIUnit();
+						}
+					}
 					if(n > 0 && (!cu || (cu->countUnits() == 1 && (cu->get(1, &exp) && exp == 1)))) {
 						if(b_pos && b_neg) mtest = mbak;
-						while(exp > -10) {
+						while(exp > -10 && n > 0) {
 							mtest.multiply_nocopy(new MathStructure(to_unit, NULL));
 							mtest.eval(eo2);
-							size_t ntest = count_unit_powers(mtest);
-							if(ntest >= n) break;
+							long int ntest = count_unit_powers(mtest);
+							test_convert(mtest, to_unit, ntest, b_neg, eo2);
+							if(n > 0 && ntest + (!prio_power) >= n) break;
 							n = ntest;
 							if(exp == 1) exp = -1;
 							else exp--;
@@ -774,11 +950,12 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 						}
 						if(exp == 1) {
 							mtest = mstruct_new;
-							while(exp < 10) {
+							while(exp < 10 && n > 0) {
 								mtest.divide_nocopy(new MathStructure(to_unit, NULL));
 								mtest.eval(eo2);
-								size_t ntest = count_unit_powers(mtest);
-								if(ntest >= n) break;
+								long int ntest = count_unit_powers(mtest);
+								test_convert(mtest, to_unit, ntest, b_pos, eo2);
+								if(n > 0 && ntest + (!prio_power) >= n) break;
 								n = ntest;
 								exp++;
 								mstruct_new = mtest;
@@ -819,8 +996,8 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 					mstruct_new.multiply_nocopy(new MathStructure(to_unit, eo.keep_prefixes ? decimal_null_prefix : NULL));
 					if(exp != 1) mstruct_new.last().raise(exp);
 				}
+				eo2.mixed_units_conversion = eo.mixed_units_conversion;
 			}
-
 			eo2.sync_units = false;
 			eo2.keep_prefixes = true;
 			if(b_eval) mstruct_new.eval(eo2);
@@ -877,7 +1054,7 @@ Unit *Calculator::findMatchingUnit(const MathStructure &mstruct) {
 		case STRUCT_POWER: {
 			if(mstruct.base()->isUnit() && mstruct.exponent()->isNumber() && mstruct.exponent()->number().isInteger() && mstruct.exponent()->number() < 10 && mstruct.exponent()->number() > -10) {
 				Unit *u_base = mstruct.base()->unit();
-				int exp = mstruct.exponent()->number().intValue();
+				int exp = mstruct.exponent()->number().intValue(), exp2 = 1;
 				if(u_base->subtype() == SUBTYPE_ALIAS_UNIT) {
 					u_base = u_base->baseUnit();
 					exp *= ((AliasUnit*) u_base)->baseExponent();
@@ -885,6 +1062,8 @@ Unit *Calculator::findMatchingUnit(const MathStructure &mstruct) {
 				for(size_t i = 0; i < units.size(); i++) {
 					Unit *u = units[i];
 					if(u->subtype() == SUBTYPE_ALIAS_UNIT && u->baseUnit() == u_base && ((AliasUnit*) u)->baseExponent() == exp) {
+						return u;
+					} else if(u->subtype() == SUBTYPE_COMPOSITE_UNIT && ((CompositeUnit*) u)->countUnits() == 1 && ((CompositeUnit*) u)->get(1, &exp2)->baseUnit() == u_base && exp == ((CompositeUnit*) u)->get(1)->baseExponent(exp2)) {
 						return u;
 					}
 				}
@@ -916,18 +1095,21 @@ Unit *Calculator::findMatchingUnit(const MathStructure &mstruct) {
 			CompositeUnit *cu = new CompositeUnit("", "temporary_find_matching_unit");
 			for(size_t i = 1; i <= mstruct.countChildren(); i++) {
 				if(mstruct.getChild(i)->isUnit()) {
-					cu->add(mstruct.getChild(i)->unit()->baseUnit());
+					cu->add(mstruct.getChild(i)->unit()->baseUnit(), mstruct.getChild(i)->unit()->baseExponent());
 				} else if(mstruct.getChild(i)->isPower() && mstruct.getChild(i)->base()->isUnit() && mstruct.getChild(i)->exponent()->isNumber() && mstruct.getChild(i)->exponent()->number().isInteger()) {
 					cu->add(mstruct.getChild(i)->base()->unit()->baseUnit(), mstruct.getChild(i)->exponent()->number().intValue());
 				}
 			}
 			if(cu->countUnits() == 1) {
-				int exp = 1;
+				int exp = 1, exp2 = 1;
 				Unit *u_base = cu->get(1, &exp);
 				if(exp == 1) return u_base;
 				for(size_t i = 0; i < units.size(); i++) {
 					Unit *u = units[i];
 					if(u->subtype() == SUBTYPE_ALIAS_UNIT && u->baseUnit() == u_base && ((AliasUnit*) u)->baseExponent() == exp) {
+						return u;
+					} else if(
+						u->subtype() == SUBTYPE_COMPOSITE_UNIT && ((CompositeUnit*) u)->countUnits() == 1 && ((CompositeUnit*) u)->get(1, &exp2)->baseUnit() == u_base && exp == ((CompositeUnit*) u)->get(1)->baseExponent(exp2)) {
 						return u;
 					}
 				}
@@ -945,7 +1127,7 @@ Unit *Calculator::findMatchingUnit(const MathStructure &mstruct) {
 								for(size_t i3 = 1; i3 <= cu->countUnits(); i3++) {
 									Unit *ui2 = ((CompositeUnit*) u)->get(i3, &exp2);
 									if(ui1 == ui2->baseUnit()) {
-										b = (exp1 == exp2);
+										b = (exp1 == ui2->baseExponent(exp2));
 										break;
 									}
 								}
@@ -1533,7 +1715,33 @@ MathStructure Calculator::convertToOptimalUnit(const MathStructure &mstruct, con
 			}
 			if(b) {
 				mstruct_new.childrenUpdated();
-				if(mstruct.isAddition()) mstruct_new.eval(eo2);
+				if(mstruct.isAddition()) {
+					mstruct_new.eval(eo2);
+				} else if(mstruct_new.isVector() && mstruct_new.size() == 3) {
+					bool b_torque = true;
+					Unit *u_joule = NULL;
+					for(size_t i = 0; i < 3 && b_torque; i++) {
+						if(mstruct_new[i].isMultiplication()) {
+							b_torque = false;
+							for(size_t i2 = 0; i2 < mstruct_new[i].size(); i2++) {
+								if(!b_torque && mstruct_new[i][i2].isUnit() && ((u_joule && mstruct_new[i][i2].unit() == u_joule) || (!u_joule && mstruct_new[i][i2].unit()->referenceName() == "J"))) {
+									b_torque = true;
+									if(!u_joule) u_joule = mstruct_new[i][i2].unit();
+								} else if(mstruct_new[i][i2].containsType(STRUCT_UNIT, true)) {
+									b_torque = false;
+									break;
+								}
+							}
+						} else if(mstruct_new[i].isUnit() && ((u_joule && mstruct_new[i].unit() == u_joule) || (!u_joule && mstruct_new[i].unit()->referenceName() == "J"))) {
+							if(!u_joule) u_joule = mstruct_new[i].unit();
+						} else {
+							b_torque = false;
+						}
+					}
+					if(b_torque && u_joule) {
+						mstruct_new = convert(mstruct_new, u_joule->baseUnit(), eo);
+					}
+				}
 			}
 			return mstruct_new;
 		}
@@ -1693,7 +1901,7 @@ MathStructure Calculator::convert(const MathStructure &mstruct_to_convert, strin
 }
 
 void set_null_prefixes(MathStructure &m) {
-	if(m.isUnit() && !m.prefix()) m.setPrefix(CALCULATOR->decimal_null_prefix);
+	if(!m.isUnit() || !m.prefix()) m.setPrefix(CALCULATOR->decimal_null_prefix);
 	for(size_t i = 0; i < m.size(); i++) {
 		set_null_prefixes(m[i]);
 	}
@@ -1810,6 +2018,9 @@ MathStructure Calculator::convert(const MathStructure &mstruct_to_convert, strin
 			eo2.sync_units = true;
 			eo2.keep_prefixes = false;
 			mstruct.eval(eo2);
+			if((eo.auto_post_conversion == POST_CONVERSION_OPTIMAL || eo.auto_post_conversion == POST_CONVERSION_OPTIMAL_SI) && mstruct.containsType(STRUCT_UNIT, true)) {
+				mstruct.set(CALCULATOR->convertToOptimalUnit(mstruct, eo, false));
+			}
 			set_null_prefixes(munits);
 			mstruct *= munits;
 			b = true;

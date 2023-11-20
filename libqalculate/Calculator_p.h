@@ -69,6 +69,7 @@ class Calculator_p {
 		MathFunction *f_cis, *f_erfi, *f_fresnels, *f_fresnelc, *f_dot, *f_times, *f_rdivide, *f_power, *f_parallel, *f_vertcat, *f_horzcat, *f_secant, *f_newton;
 		Unit *u_byn;
 		Unit *u_kelvin, *u_rankine, *u_celsius, *u_fahrenheit;
+		Unit *custom_angle_unit;
 		unordered_map<int, MathFunction*> id_functions;
 		unordered_map<int, Variable*> id_variables;
 		unordered_map<int, Unit*> id_units;
@@ -77,6 +78,9 @@ class Calculator_p {
 		TemperatureCalculationMode temperature_calculation;
 		bool matlab_matrices;
 		bool persistent_plot;
+		bool concise_uncertainty_input;
+		int exchange_rates_url3;
+		long int fixed_denominator;
 };
 
 class CalculateThread : public Thread {

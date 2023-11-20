@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<QALCULATE version="3.0.0">
+<QALCULATE version="4.6.0">
   <category>
     <!-- Unit category -->
     <_title>!units!Length</_title>
@@ -7,6 +7,7 @@
       <system>SI</system>
       <_title>Meter</_title>
       <_names>ar:m,meter,p:meters,metre,p:metres</_names>
+      <use_with_prefixes max="3">true</use_with_prefixes>
     </unit>
     <unit type="composite">
       <_title>Kilometer</_title>
@@ -158,8 +159,19 @@
     </unit>
     <unit type="alias">
       <_title>Rod (pole/perch)</_title>
-      <system>US Survey</system>
+      <system>Imperial/US</system>
       <_names>ar:rd,rod,p:rods</_names>
+      <base>
+        <unit>ft</unit>
+        <relation>16.5</relation>
+        <exponent>1</exponent>
+        <mix>2</mix>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>U.S. Survey Rod</_title>
+      <system>US Survey</system>
+      <_names>ar:US_rd,US_rod,p:rUS_ods</_names>
       <base>
         <unit>US_ft</unit>
         <relation>16.5</relation>
@@ -223,9 +235,9 @@
       </base>
     </unit>
     <unit type="alias">
-      <_title>Mil (1/1000 in)</_title>
+      <_title>Thou/mil (1/1000 in)</_title>
       <system>Imperial/US</system>
-      <_names>r:mil,p:mils</_names>
+      <_names>r:thou,mil,po:mils</_names>
       <base>
         <unit>in</unit>
         <relation>0.001</relation>
@@ -262,7 +274,7 @@
     </unit>
     <unit type="alias">
       <_title>Pied du roi (French Royal Foot)</_title>
-      <_names>r:pied_du_roi</_names>
+      <_names>r:pied_du_roi,p:pieds_du_roi</_names>
       <base>
         <unit>m</unit>
         <relation>9000/27706</relation>
@@ -271,7 +283,7 @@
     </unit>
     <unit type="alias">
       <_title>Pouce (French Royal Inch)</_title>
-      <_names>r:pouce</_names>
+      <_names>r:pouce,p:pouces</_names>
       <base>
         <unit>pied_du_roi</unit>
         <relation>1/12</relation>
@@ -280,7 +292,7 @@
     </unit>
     <unit type="alias">
       <_title>Ligne</_title>
-      <_names>r:ligne</_names>
+      <_names>r:ligne,p:lignes</_names>
       <base>
         <unit>pouce</unit>
         <relation>1/12</relation>
@@ -289,7 +301,7 @@
     </unit>
     <unit type="alias">
       <_title>Toise</_title>
-      <_names>r:toise</_names>
+      <_names>r:toise,p:toises</_names>
       <base>
         <unit>pied_du_roi</unit>
         <relation>6</relation>
@@ -503,6 +515,7 @@
       <system>SI</system>
       <_title>Gram</_title>
       <_names>ar:g,gram,p:grams</_names>
+      <use_with_prefixes max="3" default="3">true</use_with_prefixes>
     </unit>
     <unit type="composite">
       <system>SI</system>
@@ -835,6 +848,7 @@
       <system>SI</system>
       <_title>Second</_title>
       <_names>ar:s,second,p:seconds</_names>
+      <use_with_prefixes max="0">true</use_with_prefixes>
     </unit>
     <unit type="alias">
       <_title>Minute</_title>
@@ -887,12 +901,39 @@
     </unit>
     <unit type="alias">
       <_title>Julian Year</_title>
-      <_names>r:year,p:years,a:yr,annus</_names>
+      <_names>r:year,p:years,as:a_j,a:yr,annus</_names>
       <base>
         <unit>d</unit>
         <relation>365.25</relation>
         <exponent>1</exponent>
         <mix>2</mix>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Mean Gregorian Year</_title>
+      <_names>ars:a_g, gregorian_year</_names>
+      <base>
+        <unit>d</unit>
+        <relation>365.2425</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Mean Tropical Year</_title>
+      <_names>ars:a_t, tropical_year</_names>
+      <base>
+        <unit>d</unit>
+        <relation>365.24219</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Tropical Year in Year 2000</_title>
+      <_names>ars:a_2000, tropical_year_2000</_names>
+      <base>
+        <unit>s</unit>
+        <relation>1556925.445</relation>
+        <exponent>1</exponent>
       </base>
     </unit>
     <unit type="alias">
@@ -985,12 +1026,12 @@
       <unit type="base">
         <system>SI</system>
         <_title>Ampere</_title>
-        <_names>ar:A,ampere,p:amperes</_names>
+        <_names>ar:A,ampere,p:amperes,a-c:amp</_names>
       </unit>
       <unit type="alias">
         <system>CGS</system>
         <_title>Abampere</_title>
-        <_names>r:abampere,a:abA,a:aA,p:abamperes,a:Bi,biot</_names>
+        <_names>r:abampere,a:abA,p:abamperes,a:Bi,biot</_names>
         <base>
           <unit>A</unit>
           <relation>10</relation>
@@ -1103,6 +1144,50 @@
       </unit>
     </category>
     <category>
+      <_title>Electric Dipole Moment</_title>
+      <unit type="composite">
+        <system>SI</system>
+        <_title>Coulomb Meter</_title>
+        <names>r:C_m</names>
+        <part>
+          <unit>C</unit>
+          <prefix>0</prefix>
+          <exponent>1</exponent>
+        </part>
+        <part>
+          <unit>m</unit>
+          <prefix>0</prefix>
+          <exponent>1</exponent>
+        </part>
+      </unit>
+      <unit type="composite">
+        <system>CGS</system>
+        <title>Statcoulomb Centimeter</title>
+        <hidden>true</hidden>
+        <names>r:statcoulomb_cm</names>
+        <part>
+          <unit>statcoulomb</unit>
+          <prefix>0</prefix>
+          <exponent>1</exponent>
+        </part>
+        <part>
+          <unit>m</unit>
+          <prefix>-2</prefix>
+          <exponent>1</exponent>
+        </part>
+      </unit>
+      <unit type="alias">
+        <system>CGS</system>
+        <_title>Debye</_title>
+        <_names>ar:D,debye,p:debyes</_names>
+        <base>
+          <unit>statcoulomb_cm</unit>
+          <relation>1E-18</relation>
+          <exponent>1</exponent>
+        </base>
+      </unit>
+    </category>
+    <category>
       <_title>Electric Flux Density</_title>
       <unit type="composite">
         <system>SI</system>
@@ -1212,6 +1297,42 @@
       </unit>
     </category>
     <category>
+      <_title>Electrical Elastance</_title>
+      <unit type="composite">
+        <_title>Volt per Coulomb</_title>
+        <names>r:V_p_C</names>
+        <part>
+          <unit>V</unit>
+          <prefix>0</prefix>
+          <exponent>1</exponent>
+        </part>
+        <part>
+          <unit>C</unit>
+          <prefix>0</prefix>
+          <exponent>-1</exponent>
+        </part>
+      </unit>
+      <unit type="composite">
+	<system>SI</system>
+        <_title>Reciprocal Farad</_title>
+        <names>r:recF</names>
+        <part>
+          <unit>F</unit>
+          <prefix>0</prefix>
+          <exponent>-1</exponent>
+        </part>
+      </unit>
+      <unit type="alias">
+        <_title>Daraf</_title>
+        <_names>r:daraf,p:darafs</_names>
+        <base>
+          <unit>recF</unit>
+          <relation>1</relation>
+          <exponent>1</exponent>
+        </base>
+      </unit>
+    </category>
+    <category>
       <_title>Electric Resistance</_title>
       <unit type="composite">
         <hidden>true</hidden>
@@ -1300,6 +1421,20 @@
         </part>
         <part>
           <unit>m</unit>
+          <prefix>0</prefix>
+          <exponent>-1</exponent>
+        </part>
+      </unit>
+      <unit type="composite">
+        <_title>Newton per Coulomb</_title>
+        <names>r:N_p_C</names>
+        <part>
+          <unit>N</unit>
+          <prefix>0</prefix>
+          <exponent>1</exponent>
+        </part>
+        <part>
+          <unit>C</unit>
           <prefix>0</prefix>
           <exponent>-1</exponent>
         </part>
@@ -1797,7 +1932,7 @@
         <relation>100</relation>
         <exponent>2</exponent>
       </base>
-      <use_with_prefixes>true</use_with_prefixes>
+      <use_with_prefixes default="2">true</use_with_prefixes>
     </unit>
     <unit type="alias">
       <_title>Circular Mil</_title>
@@ -1933,7 +2068,7 @@
     <unit type="alias">
       <_title>Liter</_title>
       <_names>ar:L,a:l,aou:&#x2113;,liter,p:liters,litre,p:litres</_names>
-      <use_with_prefixes>true</use_with_prefixes>
+      <use_with_prefixes max="0">true</use_with_prefixes>
       <base>
         <unit>m</unit>
         <relation>0.001</relation>
@@ -2699,6 +2834,66 @@
           <exponent>-2</exponent>
         </part>
       </unit>
+      <unit type="composite">
+        <system>SI</system>
+        <_title>Meter per Second Cubed (Jerk)</_title>
+        <names>r:m_p_scu</names>
+        <part>
+          <unit>m</unit>
+          <prefix>0</prefix>
+          <exponent>1</exponent>
+        </part>
+        <part>
+          <unit>s</unit>
+          <prefix>0</prefix>
+          <exponent>-3</exponent>
+        </part>
+      </unit>
+      <unit type="composite">
+        <system>SI</system>
+        <_title>Meter per Second to the Fourth (Snap)</_title>
+        <names>r:m_p_sfourth</names>
+        <part>
+          <unit>m</unit>
+          <prefix>0</prefix>
+          <exponent>1</exponent>
+        </part>
+        <part>
+          <unit>s</unit>
+          <prefix>0</prefix>
+          <exponent>-4</exponent>
+        </part>
+      </unit>
+      <unit type="composite">
+        <system>SI</system>
+        <_title>Meter per Second to the Fifth (Crackle)</_title>
+        <names>r:m_p_sfifth</names>
+        <part>
+          <unit>m</unit>
+          <prefix>0</prefix>
+          <exponent>1</exponent>
+        </part>
+        <part>
+          <unit>s</unit>
+          <prefix>0</prefix>
+          <exponent>-5</exponent>
+        </part>
+      </unit>
+      <unit type="composite">
+        <system>SI</system>
+        <_title>Meter per Second to the Sixth (Pop)</_title>
+        <names>r:m_p_ssixth</names>
+        <part>
+          <unit>m</unit>
+          <prefix>0</prefix>
+          <exponent>1</exponent>
+        </part>
+        <part>
+          <unit>s</unit>
+          <prefix>0</prefix>
+          <exponent>-6</exponent>
+        </part>
+      </unit>
       <unit type="alias">
         <system>CGS</system>
         <_title>Galileo</_title>
@@ -3226,7 +3421,7 @@
           <relation>1000/760</relation>
           <exponent>1</exponent>
         </base>
-        <use_with_prefixes>true</use_with_prefixes>
+        <use_with_prefixes default="-3">true</use_with_prefixes>
       </unit>
       <unit type="alias">
         <_title>Millimeter of Mercury</_title>
@@ -3426,6 +3621,15 @@
       </base>
     </unit>
     <unit type="composite">
+      <_title>Kilojoule</_title>
+      <names>r:kJ_c</names>
+      <part>
+        <unit>J</unit>
+        <prefix>3</prefix>
+        <exponent>1</exponent>
+      </part>
+    </unit>
+    <unit type="composite">
       <_title>Watt Hour</_title>
       <names>r:W_h</names>
       <part>
@@ -3461,6 +3665,15 @@
         <relation>4.1868</relation>
         <exponent>1</exponent>
       </base>
+    </unit>
+    <unit type="composite">
+      <_title>Kilocalorie</_title>
+      <names>r:kcal_c</names>
+      <part>
+        <unit>cal</unit>
+        <prefix>3</prefix>
+        <exponent>1</exponent>
+      </part>
     </unit>
     <unit type="alias">
       <_title>Calorie (capital C)</_title>
@@ -3617,6 +3830,20 @@
         <part>
           <unit>g</unit>
           <prefix>3</prefix>
+          <exponent>-1</exponent>
+        </part>
+      </unit>
+      <unit type="composite">
+        <_title>Kilocalerie per Gram</_title>
+        <names>r:kcal_p_g</names>
+        <part>
+          <unit>cal</unit>
+          <prefix>3</prefix>
+          <exponent>1</exponent>
+        </part>
+        <part>
+          <unit>g</unit>
+          <prefix>0</prefix>
           <exponent>-1</exponent>
         </part>
       </unit>
@@ -4053,7 +4280,7 @@
     <unit type="base">
       <_title>Bit (Binary Digit)</_title>
       <_names>r:bit,p:bits,shannon,p:shannons,c:Sh,binary_digit,p:binary_digits</_names>
-      <use_with_prefixes>true</use_with_prefixes>
+      <use_with_prefixes min="0">true</use_with_prefixes>
     </unit>
     <unit type="alias">
       <_title>Nat</_title>
@@ -4094,7 +4321,7 @@
     <unit type="alias">
       <_title>Byte (8-bit)</_title>
       <_names>r:byte,a:B,p:bytes,octet,p:octets,a:o</_names>
-      <use_with_prefixes>true</use_with_prefixes>
+      <use_with_prefixes min="0">true</use_with_prefixes>
       <base>
         <unit>bit</unit>
         <relation>8</relation>

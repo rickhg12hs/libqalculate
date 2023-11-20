@@ -1,3 +1,360 @@
+2023-09-16 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix display of matrices and vectors with complex number form other than rectangular
+
+2023-09-12 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix besselj() and bessely()
+
+2023-09-11 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Require that duodecimal number, entered using 0d... syntax, contains at least two digits, to avoid conflict with decibel units (e.g. 0dB)
+
+2023-08-31 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix for title, ylabel, and xlabel options with whitespace in value, in plot() function
+
+2023-08-19 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix and improve to Calculator::findMatchUnit() (fixes matching unit for m/s)
+
+2023-08-13 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix segfault with curly brackets in expression
+	* Apply automatic unit conversion after conversion to variable
+
+2023-08-10 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix "E" at end of longitude replaced with "e"
+	* Add derived units for kJ, kcal, and kcal/g
+
+2023-08-02 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Concise uncertainty input (disabled by default)
+
+2023-07-30 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Round high precision intervals enclosing integers for integer arguments (excluding order argument of besselj() and bessely())
+
+2023-07-28 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add support for input of relative uncertainty using percentage (e.g. "5+/-2%") and output of interval using relative or concise (e.g. "1.2345(67)") notation
+
+2023-07-27 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Set unicode property of object name automatically (does not affect usage in definitions file)
+	* Keep prefixes for variable value in save() function
+	* Fix numerical value of lower and upper options in help text for interval display setting
+
+2023-07-26 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix fibonacci() for non-integers
+	* Fix erroneous simplication of exponentiation when power is multiplication and base is a rational number < 1 in some case (e.g. "fibonacci(fibonacci(2))")
+
+2023-07-25 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add support for specifying position of sign bit in floating point functions
+
+2023-07-23 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Use international foot as base unit for rod, and add U.S. survey rod unit
+
+2023-07-19 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add units for Electric Dipole Moment (C*m and Debye)
+	* Add units for electrical elastance (F^-1, Daraf, and V/C)
+	* Add and N/C as alternative unit for electric field strength
+	* Optimize rest of unit expression when converting to partial (insufficient) expression (e.g. 18MA×100ns to J)
+
+2023-07-03 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Replace occurrences in variable values in replace() function, when original expression contains unknown symbol/variable, and for "where" replacement
+	* Fix numerical integration when variable is present within other variable values
+
+2023-06-29 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix errornous determination of unit compatibility for equalities with unknown variables
+	* Fine-tune detection of approximate units when deciding to calculate uncertainty propagation or not
+
+2023-06-24 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add function, kron(), for Kronecker product
+	* Add constants for Pauli matrices
+	* Add radius to planets dataset and update other properties
+
+2023-06-21 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix "help set OPTION" when OPTION is an option name supported in addition to the standard name and abbreviation (e.g. "help set parse")
+
+2023-06-17 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix incomplete calculation in tan() with try exact approximation
+
+2023-06-15 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* More consistent addition and removal of angle unit from function arguments
+	* Always append radians to return value (even if zero) in relevant functions when default angle is none
+	* Do not apply x^(ab)=(x^a)^b rule if ab has unit
+
+2023-06-13 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix segfault in some cases when multiplying single column matrix with empty vector
+	* Fix segfault when MathStructure is deleted after Calculator, and in destructor of calculated DynamicVariable
+	* Fix besselj(0, 0)
+	* Do not use Tamil symbol by default for Sri Lankan rupees
+
+2023-06-11 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Change order of operations to place entrywise and ordinary operators on the same precedence level
+	* Always interpret ./, .*, and .^ as entrywise operators if user intention is unclear
+
+2023-06-10 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not calculate functions in arguments of functions that are not differentiable, after function calculation fails, before uncertainty calculation (improves efficiency)
+	* Do not save mode on exit if "-defaults" command line switch where used
+	* Show expression of subfunction (instead of index) in function info
+	* Remove duplicated "Units" heading in mode list
+
+2023-05-22 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix 0/0=0 (do not return true) and output of 2/0 (and similar)
+
+2023-05-15 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix newtonsolve() and secantsolve() not returning when no solution can be found (fixes rate() function), and improve speed in some cases
+
+2023-05-09 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix potential memory leak when loading unit data saved with version < 0.6.3
+
+2023-05-05 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Support for custom default angle unit, e.g. turn, arcsec, arcmin
+	* Append default angle unit (instead of always radians) when converting value without unit to angle unit
+
+2023-04-17 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix element() function for vector when column number is specified (non-zero)
+
+2023-04-14 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve parsing of element-wise operators with comma as decimal separator
+	* Fix segfault in some cases with curly brackets in expression
+
+2023-04-13 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix some memory leaks
+
+2023-04-12 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix segfault when conversion to base units fails because of aborted calculations
+	* Do not try to calculate norm() and magnitude() for matrices
+
+2023-04-11 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix rref() with different units for different elements
+	* Fix segfault trying to solve cbrt(x)^(1/3)-x=0 (and similar)
+	* Fix erroneous simplification of sin(x)^2*y-cos(x)*sin(x)^2*y (and similar)
+	* Fix division and exponentiation of scalar by matrix/vector, e.g. 4./[8 4.5]
+
+2023-04-10 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix segfault in function assignment with equals sign (e.g. F()=...), when an object with the same name already exists
+	* Improve abortion of calculations
+	* Replace temporary variables created during calculation after abortion
+	* Fix segfault with empty vector in uncertainty calculation
+	* Fix segfaults in some corner cases
+	* Fix some memory leaks
+	* Fix internal id does not exist error (primarily in some cases with functions without parentheses in matrices)
+
+2023-04-06 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix segfault in handling of vector variable with uncertainty
+	* Fix abortion with low max calculation time in qalc
+
+2023-04-04 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not make any difference between row and column vectors in magnitude(), norm(), and dot() functions
+
+2023-04-02 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix abbreviation for variable units (varunits) command in information (within qalc and in man page)
+
+2023-04-01 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix order of argument titles in csum() function
+
+2023-03-26 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add modular exponentiation function, powmod(), with support for calculation of modular inverse
+
+2023-03-25 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix a^n mod b when n is negative
+
+2023-03-04 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix segfault in multisolve() and improve removal of equal solutions
+
+2023-03-03 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Support elements with units in rref() and rk()
+
+2023-02-27 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Always show value of local variables using current output options, in qalc
+
+2023-02-23 Jules Bertholet <julesbertholet@quoi.xyz>
+
+	* Add "thou" name to mil unit and make it default and reference
+	* Add plurals to old French units
+
+2023-02-21 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve detection of default language on Windows
+
+2023-02-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Make pv(), fv(), and rk() case sensitive, and remove aA abbreviation from Abampere, to avoid conflicts with prefix + unit
+	* Allow "prefix" (unlocalized) as alternative for pref/prefixes qalc command
+
+2023-02-14 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix conversion from ounce (interpreted as fluid ounce) to litre with prefix
+	* Use max/min preferred for unit ordering (replaces explicit ordering of N*m and W*s)
+	* Support "help set [OPTION]" syntax and show "unrecognized option" message on help command failure, in qalc
+
+2023-02-10 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not set automatic prefix if resulting multiplier is < 1 or >= 1000, with some exceptions (units which specifies max or min preferred prefix, e.g. km)
+	* Default prefix unit property (use for gram, and few other units, instead of hardcoded value)
+	* Do not use recently introduced SI prefixes (R, Q, r, q) automatically by default
+	* Set zero max preferred prefix for second
+
+2023-02-07 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Use value of fourth argument in genvector() as step size by default if 1 (default), negative, or non-integer, and value of sixth argument is -1 (default)
+
+2023-02-03 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Prefer Nm (torque) over J when the result is a vector with three components
+	* Fix unit order for Nm and Ws
+	* Always use current number base in both base and exponent in output of scientific notation
+	* Indicate correct number base in subscript (in html formatted output) when output in original base fails
+	* Do not show multiplier if exactly 1, in html output of scientific notation
+	* Fix parsing of scientific e notation when the number is extremely large and exponentiation fails because of floating point overflow
+
+2023-02-01 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Use Unicode symbol for minus in scientific e notation
+	* Allow the same variable left and right of the equals sign (e.g. var=var+2), in variable assignment without colon, if the variable exists and the previous value is known
+
+2023-01-27 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add "amp" abbreviation to ampere unit
+
+2023-01-26 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Don't show anything on empty input in qalc
+	* Set zero as max prefix for litre
+	* Fix prefix selection in denominator when multiplier is higher than the value of the largest prefix
+	* Make sure that prefixes are stored in correct order
+
+2023-01-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add min and max preferred prefix properties to units, and use kilo as max for meter, gram, and zero as min for byte, and bit)
+
+2023-01-11 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add option to change symbols used for output of digits 10 and 11 in duodecimal numbers. Default digits are now A and B, instead of ↊ and ↋ (or X and E)
+
+2023-01-10 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix reactivation of global object after deletion of conflicting object
+
+2023-01-07 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Use "help [OPTION]" to display description for a single set option, in qalc
+
+2023-01-04 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* EUR has replaced HRK as currency of Croatia
+
+2022-12-30 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Use json exchange rate data from exchangerate.host, mycurrency.net, or floatrates.com (try in mentioned order), as secondary exchange rates source
+
+2022-12-28 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix unit tests (ordering in output changed)
+
+2022-12-22 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Check that output of command, in command() function, is a reasonably sane expression
+	* Fix countTotalChildren() with count_function_as_one set to false
+
+2022-12-20 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add m/s^3, m/s^4, m/s^5, and m/s^6 as derived units (improves automatic unit conversion)
+
+2022-12-19 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix randuniform()
+	* Fix dual approximation with random number functions
+
+2022-12-14 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix segfault in qalc when set command option and value contains more than three words
+	* Fix errornous calculation of arg(x^n) in some cases (when transformed to arg(x)*n without mod 2pi)
+
+2022-12-11 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Use standard form (sorting) for polynomials
+
+2022-12-07 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Allow non-numerical arguments in atan2()
+
+2022-12-02 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Set message print options after unicode setting has been updated using u8 command line option (fixes signs in gnuplot legend)
+
+2022-11-20 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add new SI prefixes (R, r, Q, q)
+
+2022-11-14 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix automatic/dual fraction format after conversion (e.g. "8 to score")
+
+2022-10-31 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Always parse element-wise operator as element-wise function, even if arguments are scalars (fixes variable substitution when variable is vector)
+
+2022-10-27 ioio85 <ioio85@gmail.com>
+
+	* Add units ounce force (ozf) and rack unit (U)
+
+2022-10-24 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix order of user edited global units and look for activated units first for base unit (do not use deactivated global unit)
+	* Use current status of limit implicit multiplication setting during parsing of conversion expression
+	* Make unit added to original expression for unit conversion more consistent
+	* Do not use MathStructure in parentheses property during parsing (simplifies logic and fixes inconsistently displayed parsing of "7d 5h" and similar)
+	* Add hr and hrs names to hour unit
+
+2022-10-22 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix genvector() with negative step size or expression as step size, and allow variable in step size
+	* Fix genvector() with expression as number of steps
+	* If object name does not match full name string in expression, check for complete match with prefix plus unit (fixes Gyr)
+	* Make MYR currency case-sensitive to fix conflict with Myr (megayear)
+
+2022-10-21 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Conversion to any type of expression (if ordinary conversion fails, try simple division)
+	* Fix milli- and centimeter of water units
+
 2022-10-15 Hanna Knutsson <hanna.knutsson@protonmail.com>
 
 	* Fix slow conversion to optimal or base units of uncertainty with units inside value and/or error

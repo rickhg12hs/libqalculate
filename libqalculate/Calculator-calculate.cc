@@ -325,21 +325,8 @@ bool Calculator::calculateRPN(MathFunction *f, int msecs, const EvaluationOption
 				iregs++;
 			}
 			if(!fill_vector && f->getArgumentDefinition(i) && f->getArgumentDefinition(i)->type() == ARGUMENT_TYPE_ANGLE) {
-				switch(eo.parse_options.angle_unit) {
-					case ANGLE_UNIT_DEGREES: {
-						(*mstruct)[i - 1].multiply(getDegUnit());
-						break;
-					}
-					case ANGLE_UNIT_GRADIANS: {
-						(*mstruct)[i - 1].multiply(getGraUnit());
-						break;
-					}
-					case ANGLE_UNIT_RADIANS: {
-						(*mstruct)[i - 1].multiply(getRadUnit());
-						break;
-					}
-					default: {}
-				}
+				Unit *u = default_angle_unit(eo);
+				if(u) (*mstruct)[i - 1].multiply(u);
 			}
 		}
 		if(fill_vector) mstruct->childrenUpdated();
@@ -450,21 +437,8 @@ MathStructure *Calculator::calculateRPN(MathFunction *f, const EvaluationOptions
 				iregs++;
 			}
 			if(!fill_vector && f->getArgumentDefinition(i) && f->getArgumentDefinition(i)->type() == ARGUMENT_TYPE_ANGLE) {
-				switch(eo.parse_options.angle_unit) {
-					case ANGLE_UNIT_DEGREES: {
-						(*mstruct)[i - 1].multiply(getDegUnit());
-						break;
-					}
-					case ANGLE_UNIT_GRADIANS: {
-						(*mstruct)[i - 1].multiply(getGraUnit());
-						break;
-					}
-					case ANGLE_UNIT_RADIANS: {
-						(*mstruct)[i - 1].multiply(getRadUnit());
-						break;
-					}
-					default: {}
-				}
+				Unit *u = default_angle_unit(eo);
+				if(u) (*mstruct)[i - 1].multiply(u);
 			}
 		}
 		if(fill_vector) mstruct->childrenUpdated();
@@ -1085,12 +1059,13 @@ void print_dual(const MathStructure &mresult, const string &original_expression,
 	}
 }
 
-bool test_simplified(const MathStructure &m) {
+bool test_simplified(const MathStructure &m, bool top = true) {
 	if(m.isFunction() || (m.isVariable() && m.variable()->isKnown()) || (m.isUnit() && (m.unit()->hasApproximateRelationToBase() || (m.unit()->isCurrency() && m.unit() != CALCULATOR->getLocalCurrency())))) return false;
 	for(size_t i = 0; i < m.size(); i++) {
-		if(!test_simplified(m[i])) return false;
+		if(!test_simplified(m[i], false)) return false;
 	}
 	if(m.isPower() && m[0].containsType(STRUCT_NUMBER)) return false;
+	if(!top && m.isNumber() && m.number().isFloatingPoint()) return false;
 	return true;
 }
 void flatten_addmulti(MathStructure &m) {
@@ -1233,6 +1208,8 @@ void replace_zero_symbol(MathStructure &m) {
 				if(m[i].isUndefined()) m[i].set(CALCULATOR->getVariableById(VARIABLE_ID_X), true);
 			}
 		}
+	} else if(m.isVariable() && m.variable() == CALCULATOR->getVariableById(VARIABLE_ID_UNDEFINED)) {
+		m.setUndefined();
 	}
 	for(size_t i = 0; i < m.size(); i++) {
 		replace_zero_symbol(m[i]);
@@ -1326,13 +1303,14 @@ void calculate_dual_exact(MathStructure &mstruct_exact, MathStructure *mstruct, 
 	int dual_approximation = 0;
 	if(auto_approx == AUTOMATIC_APPROXIMATION_AUTO) dual_approximation = -1;
 	else if(auto_approx == AUTOMATIC_APPROXIMATION_DUAL) dual_approximation = 1;
-	if(dual_approximation != 0 && evalops.approximation == APPROXIMATION_TRY_EXACT && mstruct->isApproximate() && (dual_approximation > 0 || (!mstruct->containsType(STRUCT_UNIT, false, false, false) && !parsed_mstruct->containsType(STRUCT_UNIT, false, false, false) && original_expression.find(DOT) == string::npos)) && !parsed_mstruct->containsFunctionId(FUNCTION_ID_SAVE) && !parsed_mstruct->containsFunctionId(FUNCTION_ID_PLOT) && !parsed_mstruct->containsInterval(true, false, false, false, true)) {
+	if(dual_approximation != 0 && evalops.approximation == APPROXIMATION_TRY_EXACT && mstruct->isApproximate() && (dual_approximation > 0 || (!mstruct->containsType(STRUCT_UNIT, false, false, false) && !parsed_mstruct->containsType(STRUCT_UNIT, false, false, false) && original_expression.find(DOT) == string::npos)) && !parsed_mstruct->containsFunctionId(FUNCTION_ID_SAVE) && !parsed_mstruct->containsFunctionId(FUNCTION_ID_PLOT) && !parsed_mstruct->containsFunctionId(FUNCTION_ID_RAND) && !parsed_mstruct->containsFunctionId(FUNCTION_ID_RANDN) && !parsed_mstruct->containsFunctionId(FUNCTION_ID_RAND_POISSON) && !parsed_mstruct->containsInterval(true, false, false, false, true)) {
 		evalops.approximation = APPROXIMATION_EXACT;
 		evalops.expand = -2;
 		CALCULATOR->beginTemporaryStopMessages();
 		if(msecs > 0) CALCULATOR->startControl(msecs);
-		mstruct_exact = CALCULATOR->calculate(original_expression, evalops);
-		if(CALCULATOR->aborted() || mstruct_exact.isApproximate() || (dual_approximation < 0 && max_size > 0 && (test_max_addition_size(mstruct_exact, (size_t) max_size) || mstruct_exact.countTotalChildren(false) > (size_t) max_size * 5))) {
+		MathStructure tmp_parse;
+		mstruct_exact = CALCULATOR->calculate(original_expression, evalops, &tmp_parse);
+		if(CALCULATOR->aborted() || mstruct_exact.isApproximate() || (dual_approximation < 0 && max_size > 0 && (test_max_addition_size(mstruct_exact, (size_t) max_size) || mstruct_exact.countTotalChildren(false) > (size_t) max_size * 6))) {
 			mstruct_exact.setUndefined();
 		} else if(test_simplified(mstruct_exact)) {
 			mstruct->set(mstruct_exact);
@@ -1490,19 +1468,19 @@ bool expression_contains_save_function(const string &str, const ParseOptions &po
 		CALCULATOR->parseSigns(value);
 		size_t i2 = str.find(name, i);
 		if(i2 != string::npos) {
-			ExpressionItem *item1  = CALCULATOR->getActiveExpressionItem(name);
-			ExpressionItem *item2  = item1 ? CALCULATOR->getActiveExpressionItem(name, item1) : NULL;
+			ExpressionItem *item1 = CALCULATOR->getActiveExpressionItem(name);
+			ExpressionItem *item2 = item1 ? CALCULATOR->getActiveExpressionItem(name, item1) : NULL;
 			if(item1) {
 				MathStructure mtest;
 				CALCULATOR->beginTemporaryStopMessages();
 				CALCULATOR->parse(&mtest, str.substr(i + 1, str.length() - (i + 1)), po);
 				CALCULATOR->endTemporaryStopMessages();
-				if(!b_func && item1->type() == TYPE_VARIABLE && mtest.contains((Variable*) item1, true, true, false)) return false;
+				if(!b_func && item1->type() == TYPE_VARIABLE && !((Variable*) item1)->isKnown() && mtest.contains((Variable*) item1, true, true, false)) return false;
 				else if(!b_func && item1->type() == TYPE_UNIT && mtest.contains((Unit*) item1, true, true, false)) return false;
 				else if(b_func && item1->type() == TYPE_FUNCTION && mtest.containsFunction((MathFunction*) item1, true, true, false)) return false;
-				if(!b_func && item2 && item2->type() == TYPE_VARIABLE && mtest.contains((Variable*) item2, true, true, false)) return false;
+				if(!b_func && item2 && item2->type() == TYPE_VARIABLE && !((Variable*) item2)->isKnown() && mtest.contains((Variable*) item2, true, true, false)) return false;
 				else if(!b_func && item2 && item2->type() == TYPE_UNIT && mtest.contains((Unit*) item2, true, true, false)) return false;
-				else if(b_func && item2->type() == TYPE_FUNCTION && mtest.containsFunction((MathFunction*) item2, true, true, false)) return false;
+				else if(b_func && item2 && item2->type() == TYPE_FUNCTION && mtest.containsFunction((MathFunction*) item2, true, true, false)) return false;
 			}
 		}
 	}
@@ -1572,12 +1550,12 @@ bool transform_expression_for_equals_save(string &str, const ParseOptions &po) {
 				CALCULATOR->beginTemporaryStopMessages();
 				CALCULATOR->parse(&mtest, str.substr(i + 1, str.length() - (i + 1)), po);
 				CALCULATOR->endTemporaryStopMessages();
-				if(!b_func && item1->type() == TYPE_VARIABLE && mtest.contains((Variable*) item1, true, true, false)) return false;
+				if(!b_func && item1->type() == TYPE_VARIABLE && !((Variable*) item1)->isKnown() && mtest.contains((Variable*) item1, true, true, false)) return false;
 				else if(!b_func && item1->type() == TYPE_UNIT && mtest.contains((Unit*) item1, true, true, false)) return false;
 				else if(b_func && item1->type() == TYPE_FUNCTION && mtest.containsFunction((MathFunction*) item1, true, true, false)) return false;
-				if(!b_func && item2 && item2->type() == TYPE_VARIABLE && mtest.contains((Variable*) item2, true, true, false)) return false;
+				if(!b_func && item2 && item2->type() == TYPE_VARIABLE && !((Variable*) item2)->isKnown() && mtest.contains((Variable*) item2, true, true, false)) return false;
 				else if(!b_func && item2 && item2->type() == TYPE_UNIT && mtest.contains((Unit*) item2, true, true, false)) return false;
-				else if(b_func && item2->type() == TYPE_FUNCTION && mtest.containsFunction((MathFunction*) item2, true, true, false)) return false;
+				else if(b_func && item2 && item2->type() == TYPE_FUNCTION && mtest.containsFunction((MathFunction*) item2, true, true, false)) return false;
 			}
 		}
 	}
@@ -1598,6 +1576,36 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 	return calculateAndPrint(str, msecs, eo, po, AUTOMATIC_FRACTION_OFF, AUTOMATIC_APPROXIMATION_OFF, parsed_expression, max_length, result_is_comparison, false, 0, TAG_TYPE_HTML);
 }
 
+long int get_fixed_denominator2(const string &str, NumberFractionFormat &nff, bool b_minus, int frac) {
+	long int fden = 0;
+	if((frac > 0 && EQUALS_IGNORECASE_AND_LOCAL(str, "fraction", _("fraction"))) || (frac == 2 && str == "frac")) {
+		fden = -1;
+		if(b_minus) nff = FRACTION_FRACTIONAL;
+		else nff = FRACTION_COMBINED;
+	} else {
+		if(str.length() > 2 && str[0] == '1' && str[1] == '/' && str.find_first_not_of(NUMBERS SPACES, 2) == string::npos) {
+			fden = s2i(str.substr(2, str.length() - 2));
+		} else if(str == "3rds") {
+			fden = 3;
+		} else if(str == "halves") {
+			fden = 2;
+		} else if(str.length() > 3 && str.find("ths", str.length() - 3) != string::npos && str.find_first_not_of(NUMBERS SPACES) == str.length() - 3) {
+			fden = s2i(str.substr(0, str.length() - 3));
+		}
+		if(fden > 1) {
+			if(b_minus) nff = FRACTION_FRACTIONAL_FIXED_DENOMINATOR;
+			else nff = FRACTION_COMBINED_FIXED_DENOMINATOR;
+		}
+	}
+	return fden;
+}
+long int get_fixed_denominator(const string &str, NumberFractionFormat &nff, int frac) {
+	size_t n = 0;
+	if(str[0] == '-' || str[0] == '+') n = 1;
+	if(n > 0) return get_fixed_denominator2(str.substr(n, str.length() - n), nff, str[0] == '-', frac);
+	return get_fixed_denominator2(str, nff, false, frac);
+}
+
 string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOptions &eo, const PrintOptions &po, AutomaticFractionFormat auto_fraction, AutomaticApproximation auto_approx, std::string *parsed_expression, int max_length, bool *result_is_comparison, bool format, int colorize, int tagtype) {
 
 	if(msecs > 0) startControl(msecs);
@@ -1611,6 +1619,9 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 	MathStructure mstruct;
 	bool do_bases = false, do_factors = false, do_pfe = false, do_calendars = false, do_expand = false, do_binary_prefixes = false, complex_angle_form = false;
 
+	gsub(ID_WRAP_LEFT, LEFT_PARENTHESIS, str);
+	gsub(ID_WRAP_RIGHT, RIGHT_PARENTHESIS, str);
+
 	string to_str = parseComments(str, evalops.parse_options);
 	if(!to_str.empty() && str.empty()) {stopControl(); if(parsed_expression) {*parsed_expression = "";} return "";}
 
@@ -1619,6 +1630,7 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 	Number base_save;
 	bool custom_base_set = false;
 	int save_bin = priv->use_binary_prefixes;
+	long int save_fden = priv->fixed_denominator;
 	bool had_to_expression = false;
 	if(separateToExpression(from_str, to_str, evalops, true)) {
 		remove_duplicate_blanks(to_str);
@@ -1626,7 +1638,7 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 		string to_str1, to_str2;
 		had_to_expression = true;
 		while(true) {
-			CALCULATOR->separateToExpression(to_str, str_left, evalops, true);
+			separateToExpression(to_str, str_left, evalops, true);
 			remove_blank_ends(to_str);
 			size_t ispace = to_str.find_first_of(SPACES);
 			if(ispace != string::npos) {
@@ -1645,6 +1657,9 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 				printops.base = BASE_OCTAL;
 			} else if(equalsIgnoreCase(to_str, "duo") || EQUALS_IGNORECASE_AND_LOCAL(to_str, "duodecimal", _("duodecimal"))) {
 				printops.base = BASE_DUODECIMAL;
+			} else if(equalsIgnoreCase(to_str, "doz") || equalsIgnoreCase(to_str, "dozenal")) {
+				printops.base = BASE_DUODECIMAL;
+				printops.custom_time_zone = TZ_DOZENAL;
 			} else if(equalsIgnoreCase(to_str, "roman") || equalsIgnoreCase(to_str, _("roman"))) {
 				printops.base = BASE_ROMAN_NUMERALS;
 			} else if(equalsIgnoreCase(to_str, "bijective") || equalsIgnoreCase(to_str, _("bijective"))) {
@@ -1724,8 +1739,6 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 				complex_angle_form = true;
 			} else if(to_str == "cis") {
 				evalops.complex_number_form = COMPLEX_NUMBER_FORM_CIS;
-			} else if(EQUALS_IGNORECASE_AND_LOCAL(to_str, "fraction", _("fraction"))) {
-				printops.number_fraction_format = FRACTION_COMBINED;
 			} else if(EQUALS_IGNORECASE_AND_LOCAL(to_str, "factors", _("factors")) || equalsIgnoreCase(to_str, "factor")) {
 				evalops.structuring = STRUCTURING_FACTORIZE;
 				do_factors = true;
@@ -1770,21 +1783,32 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 				evalops.auto_post_conversion = POST_CONVERSION_NONE;
 				evalops.mixed_units_conversion = MIXED_UNITS_CONVERSION_FORCE_INTEGER;
 			} else {
-				// ? in front of unit expression is interpreted as a request for the optimal prefix.
-				evalops.parse_options.units_enabled = true;
-				if(to_str[0] == '?' || (to_str.length() > 1 && to_str[1] == '?' && (to_str[0] == 'a' || to_str[0] == 'd'))) {
-					printops.use_unit_prefixes = true;
-					printops.use_prefixes_for_currencies = true;
-					printops.use_prefixes_for_all_units = true;
-					if(to_str[0] == 'a') printops.use_all_prefixes = true;
-					else if(to_str[0] == 'd') priv->use_binary_prefixes = 0;
-				} else if(to_str.length() > 1 && to_str[1] == '?' && to_str[0] == 'b') {
-					// b? in front of unit expression: use binary prefixes
-					do_binary_prefixes = true;
+				NumberFractionFormat nff = FRACTION_DECIMAL;
+				string to_str2 = to_str;
+				CALCULATOR->parseSigns(to_str2);
+				long int fden = get_fixed_denominator(to_str2, nff, 1);
+				if(fden != 0) {
+					auto_fraction = AUTOMATIC_FRACTION_OFF;
+					printops.restrict_fraction_length = false;
+					printops.number_fraction_format = nff;
+					if(fden > 1) priv->fixed_denominator = fden;
+				} else {
+					// ? in front of unit expression is interpreted as a request for the optimal prefix.
+					evalops.parse_options.units_enabled = true;
+					if(to_str[0] == '?' || (to_str.length() > 1 && to_str[1] == '?' && (to_str[0] == 'a' || to_str[0] == 'd'))) {
+						printops.use_unit_prefixes = true;
+						printops.use_prefixes_for_currencies = true;
+						printops.use_prefixes_for_all_units = true;
+						if(to_str[0] == 'a') printops.use_all_prefixes = true;
+						else if(to_str[0] == 'd') priv->use_binary_prefixes = 0;
+					} else if(to_str.length() > 1 && to_str[1] == '?' && to_str[0] == 'b') {
+						// b? in front of unit expression: use binary prefixes
+						do_binary_prefixes = true;
+					}
+					// expression after "to" is by default interpreted as unit expression
+					if(!str_conv.empty()) str_conv += " to ";
+					str_conv += to_str;
 				}
-				// expression after "to" is by default interpreted as unit expression
-				if(!str_conv.empty()) str_conv += " to ";
-				str_conv += to_str;
 			}
 			if(str_left.empty()) break;
 			to_str = str_left;
@@ -1855,7 +1879,7 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 
 	MathStructure mstruct_exact;
 	mstruct_exact.setUndefined();
-	if((!do_calendars || !mstruct.isDateTime()) && !do_bases && !units_changed && auto_approx != AUTOMATIC_APPROXIMATION_OFF && (auto_approx == AUTOMATIC_APPROXIMATION_DUAL || printops.base == BASE_DECIMAL)) {
+	if(!aborted() && (!do_calendars || !mstruct.isDateTime()) && !do_bases && !units_changed && auto_approx != AUTOMATIC_APPROXIMATION_OFF && (auto_approx == AUTOMATIC_APPROXIMATION_DUAL || printops.base == BASE_DECIMAL)) {
 		bool b = true;
 		if(msecs > 0) {
 			long int usec, sec;
@@ -1878,12 +1902,12 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 		}
 		if(b) {
 			calculate_dual_exact(mstruct_exact, &mstruct, str, &parsed_struct, evalops, auto_approx, 0, max_length);
-			if(CALCULATOR->aborted()) {
-				mstruct_exact.setUndefined();
-				CALCULATOR->stopControl();
-				CALCULATOR->startControl(msecs / 5);
-			}
+			if(aborted()) mstruct_exact.setUndefined();
 		}
+	}
+	if(aborted()) {
+		stopControl();
+		startControl(msecs / 5);
 	}
 
 	// handle "to factors", and "factor" or "expand" in front of the expression
@@ -2057,14 +2081,17 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 
 	after_print:
 
-	if(msecs > 0) stopControl();
-
 	// restore options
 	if(custom_base_set) setCustomOutputBase(base_save);
 	priv->use_binary_prefixes = save_bin;
+	priv->fixed_denominator = save_fden;
 
 	// output parsed value
 	if(parsed_expression) {
+		if(aborted()) {
+			stopControl();
+			startControl(msecs / 5);
+		}
 		PrintOptions po_parsed;
 		po_parsed.preserve_format = true;
 		po_parsed.show_ending_zeroes = false;
@@ -2102,6 +2129,7 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 		parsed_struct.format(po_parsed);
 		*parsed_expression = parsed_struct.print(po_parsed, format, colorize, tagtype);
 	}
+	if(msecs > 0) stopControl();
 
 	printops.is_approximate = save_is_approximate;
 	if(po.is_approximate && (exact_comparison || !alt_results.empty())) *po.is_approximate = false;
@@ -2288,7 +2316,7 @@ bool Calculator::hasWhereExpression(const string &str, const EvaluationOptions &
 		i2 = str.rfind(_("where"), i - 1);
 		i = str.rfind("where", i - 1);
 		if(i2 != string::npos && (i == string::npos || i < i2)) {l = strlen(_("where")); i = i2;}
-		else l = 2;
+		else l = 5;
 		if(i == string::npos) break;
 		if(i > 0 && is_in(SPACES, str[i - 1]) && i + l < str.length() && is_in(SPACES, str[i + l])) return true;
 	}
@@ -2397,7 +2425,7 @@ bool handle_where_expression(MathStructure &m, MathStructure &mstruct, const Eva
 				// if left value is a function without any arguments, do function replacement
 				if(!replace_function(mstruct, m[0].function(), m[1].function(), eo)) CALCULATOR->error(false, _("Original value (%s) was not found."), (m[0].function()->name() + "()").c_str(), NULL);
 			} else {
-				if(mstruct.countOccurrences(m[0]) > 1) {
+				if(mstruct.countOccurrences(m[0], true) > 1) {
 
 					// make sure that only a single random value is used
 					calculate_rand(m[1], eo);
@@ -2407,12 +2435,12 @@ bool handle_where_expression(MathStructure &m, MathStructure &mstruct, const Eva
 						MathStructure mv(m[1]);
 						replace_f_interval(mv, eo);
 						replace_intervals_f(mv);
-						if(!mstruct.replace(m[0], mv)) CALCULATOR->error(false, _("Original value (%s) was not found."), format_and_print(m[0]).c_str(), NULL);
+						if(!mstruct.replace(m[0], mv, false, false, true)) CALCULATOR->error(false, _("Original value (%s) was not found."), format_and_print(m[0]).c_str(), NULL);
 					} else {
-						if(!mstruct.replace(m[0], m[1])) CALCULATOR->error(false, _("Original value (%s) was not found."), format_and_print(m[0]).c_str(), NULL);
+						if(!mstruct.replace(m[0], m[1], false, false, true)) CALCULATOR->error(false, _("Original value (%s) was not found."), format_and_print(m[0]).c_str(), NULL);
 					}
 				} else {
-					if(!mstruct.replace(m[0], m[1])) CALCULATOR->error(false, _("Original value (%s) was not found."), format_and_print(m[0]).c_str(), NULL);
+					if(!mstruct.replace(m[0], m[1], false, false, true)) CALCULATOR->error(false, _("Original value (%s) was not found."), format_and_print(m[0]).c_str(), NULL);
 				}
 			}
 			return true;
@@ -2483,7 +2511,7 @@ bool handle_where_expression(MathStructure &m, MathStructure &mstruct, const Eva
 						vars.push_back(var);
 						varms.push_back(m[0]);
 						MathStructure u_var(var);
-						if(!mstruct.replace(m[0], u_var)) CALCULATOR->error(false, _("Original value (%s) was not found."), format_and_print(m[0]).c_str(), NULL);
+						if(!mstruct.replace(m[0], u_var, false, false, true)) CALCULATOR->error(false, _("Original value (%s) was not found."), format_and_print(m[0]).c_str(), NULL);
 						return true;
 					}
 				}
@@ -2508,6 +2536,15 @@ bool handle_where_expression(MathStructure &m, MathStructure &mstruct, const Eva
 	CALCULATOR->error(true, _("Unhandled \"where\" expression: %s"), format_and_print(m).c_str(), NULL);
 	return false;
 }
+void replace_unregistered_variables(MathStructure &m) {
+	if(m.isVariable() && m.variable()->isKnown() && !m.variable()->isRegistered()) {
+		m.set(((KnownVariable*) m.variable())->get());
+	}
+	for(size_t i = 0; i < m.size(); i++) {
+		replace_unregistered_variables(m[i]);
+	}
+}
+
 MathStructure Calculator::calculate(string str, const EvaluationOptions &eo, MathStructure *parsed_struct, MathStructure *to_struct, bool make_to_division) {
 
 	string str2, str_where;
@@ -2667,6 +2704,8 @@ MathStructure Calculator::calculate(string str, const EvaluationOptions &eo, Mat
 		mstruct.replace(vars[i], varms[i]);
 		vars[i]->destroy();
 	}
+
+	if(aborted()) replace_unregistered_variables(mstruct);
 
 	return mstruct;
 
