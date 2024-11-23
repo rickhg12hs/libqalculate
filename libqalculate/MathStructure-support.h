@@ -87,7 +87,6 @@ bool sqrfree(MathStructure &mpoly, const EvaluationOptions &eo);
 bool sqrfree(MathStructure &mpoly, const std::vector<MathStructure> &symbols, const EvaluationOptions &eo);
 bool simplify_functions(MathStructure &mstruct, const EvaluationOptions &eo, const EvaluationOptions &feo, const MathStructure &x_var = m_undefined);
 bool factorize_find_multiplier(const MathStructure &mstruct, MathStructure &mnew, MathStructure &factor_mstruct, bool only_units = false);
-bool is_unit_multiexp(const MathStructure &mstruct);
 bool has_approximate_relation_to_base(Unit *u, bool do_intervals = true);
 bool contains_approximate_relation_to_base(const MathStructure &m, bool do_intervals = true);
 bool contains_diff_for(const MathStructure &m, const MathStructure &x_var);
@@ -122,14 +121,13 @@ bool replace_interval_unknowns(MathStructure &m, bool do_assumptions = false);
 bool remove_rad_unit(MathStructure &m, const EvaluationOptions &eo, bool top = true);
 int contains_ass_intval(const MathStructure &m);
 int compare_check_incompability(MathStructure *mtest);
-bool calculate_nondifferentiable_functions(MathStructure &m, const EvaluationOptions &eo, bool recursive = true, bool do_unformat = true, int i_type = 0);
+bool calculate_nondifferentiable_functions(MathStructure &m, const EvaluationOptions &eo, bool recursive = true, bool do_unformat = true, int i_type = 0, size_t depth = 1);
 bool function_differentiable(MathFunction *o_function);
 bool montecarlo(const MathStructure &minteg, Number &nvalue, const MathStructure &x_var, const EvaluationOptions &eo, Number a, Number b, Number n);
 bool romberg(const MathStructure &minteg, Number &nvalue, const MathStructure &x_var, const EvaluationOptions &eo, Number a, Number b, long int max_steps = -1, long int min_steps = 6, bool safety_measures = true);
 bool sync_approximate_units(MathStructure &m, const EvaluationOptions &feo, std::vector<KnownVariable*> *vars = NULL, std::vector<MathStructure> *uncs = NULL, bool do_intervals = true);
 void fix_to_struct(MathStructure &m);
-int has_information_unit(const MathStructure &m, bool top = true);
-bool calculate_userfunctions(MathStructure &m, const MathStructure &x_mstruct, const EvaluationOptions &eo, bool b_vector = false);
+bool calculate_userfunctions(MathStructure &m, const MathStructure &x_mstruct, const EvaluationOptions &eo, bool b_vector = false, size_t depth = 1);
 bool comparison_is_not_equal(ComparisonResult cr);
 bool comparison_is_equal_or_less(ComparisonResult cr);
 bool comparison_is_equal_or_greater(ComparisonResult cr);
@@ -139,12 +137,11 @@ Variable *find_interval_replace_var_comp(MathStructure &m, const EvaluationOptio
 void generate_plotvector(const MathStructure &m, MathStructure x_mstruct, const MathStructure &min, const MathStructure &max, int steps, MathStructure &x_vector, MathStructure &y_vector, const EvaluationOptions &eo, bool adaptive = true);
 void generate_plotvector(const MathStructure &m, MathStructure x_mstruct, const MathStructure &min, const MathStructure &max, const MathStructure &step, MathStructure &x_vector, MathStructure &y_vector, const EvaluationOptions &eo);
 
-void print_dual(const MathStructure &mresult, const std::string &original_expression, const MathStructure &mparse, MathStructure &mexact, std::string &result_str, std::vector<std::string> &results_v, PrintOptions &po, const EvaluationOptions &evalops, AutomaticFractionFormat auto_frac, AutomaticApproximation auto_approx, bool cplx_angle = false, bool *exact_cmp = NULL, bool b_parsed = true, bool format = false, int colorize = 0, int tagtype = TAG_TYPE_HTML, int max_length = -1);
-void calculate_dual_exact(MathStructure &mstruct_exact, MathStructure *mstruct, const std::string &original_expression, const MathStructure *parsed_mstruct, EvaluationOptions &evalops, AutomaticApproximation auto_approx, int msecs = 0, int max_size = 10);
-bool transform_expression_for_equals_save(std::string&, const ParseOptions&);
-bool expression_contains_save_function(const std::string&, const ParseOptions&, bool = false);
 void replace_internal_operators(std::string &str);
-long int get_fixed_denominator(const std::string &str, NumberFractionFormat &nff, int frac);
+long int get_fixed_denominator(const std::string &str, NumberFractionFormat &nff, int frac, bool *has_sign = NULL);
+bool contains_fraction_q(const MathStructure&);
+bool compare_name_with_error(const std::string &name, const std::string &str, const size_t &name_length, int base, size_t ignore_us, int errors_allowed, bool case_sensitive);
+RoundingMode get_rounding_mode(const PrintOptions &po);
 
 #define HAS_DEFAULT_ANGLE_UNIT(x) (x != ANGLE_UNIT_NONE && (x != ANGLE_UNIT_CUSTOM || CALCULATOR->customAngleUnit()))
 #define NO_DEFAULT_ANGLE_UNIT(x) (x == ANGLE_UNIT_NONE || (x == ANGLE_UNIT_CUSTOM && !CALCULATOR->customAngleUnit()))
@@ -156,6 +153,9 @@ void set_fraction_of_turn(MathStructure &mstruct, const EvaluationOptions &eo, l
 void add_fraction_of_turn(MathStructure &mstruct, const EvaluationOptions &eo, long int num, long int den, bool append = false);
 void multiply_by_fraction_of_radian(MathStructure &mstruct, const EvaluationOptions &eo, long int num, long int den);
 Unit *default_angle_unit(const EvaluationOptions &eo, bool return_rad_if_none = false);
+
+bool check_recursive_depth(const MathStructure &m, size_t max_depth = 1000, bool show_error = true);
+bool check_recursive_function_depth(size_t depth, bool show_error = true);
 
 #endif
 

@@ -1,7 +1,7 @@
 /*
     Qalculate
 
-    Copyright (C) 2003-2007, 2008, 2016-2021  Hanna Knutsson (hanna.knutsson@protonmail.com)
+    Copyright (C) 2003-2007, 2008, 2016-2024  Hanna Knutsson (hanna.knutsson@protonmail.com)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -25,9 +25,13 @@
 #include "QalculateDateTime.h"
 
 #include <locale.h>
-#include <unistd.h>
+#ifdef _MSC_VER
+#	include <sys/utime.h>
+#else
+#	include <unistd.h>
+#	include <utime.h>
+#endif
 #include <time.h>
-#include <utime.h>
 #include <limits.h>
 #include <sys/types.h>
 
@@ -45,14 +49,14 @@ using std::iterator;
 
 #include "Calculator_p.h"
 
-PrintOptions::PrintOptions() : min_exp(EXP_PRECISION), base(BASE_DECIMAL), base_display(BASE_DISPLAY_NONE), lower_case_numbers(false), lower_case_e(false), number_fraction_format(FRACTION_DECIMAL), indicate_infinite_series(false), show_ending_zeroes(true), abbreviate_names(true), use_reference_names(false), place_units_separately(true), use_unit_prefixes(true), use_prefixes_for_all_units(false), use_prefixes_for_currencies(false), use_all_prefixes(false), use_denominator_prefix(true), negative_exponents(false), short_multiplication(true), limit_implicit_multiplication(false), allow_non_usable(false), use_unicode_signs(false), multiplication_sign(MULTIPLICATION_SIGN_DOT), division_sign(DIVISION_SIGN_DIVISION_SLASH), spacious(true), excessive_parenthesis(false), halfexp_to_sqrt(true), min_decimals(0), max_decimals(-1), use_min_decimals(true), use_max_decimals(true), round_halfway_to_even(false), improve_division_multipliers(true), prefix(NULL), is_approximate(NULL), can_display_unicode_string_function(NULL), can_display_unicode_string_arg(NULL), hide_underscore_spaces(false), preserve_format(false), allow_factorization(false), spell_out_logical_operators(false), restrict_to_parent_precision(true), restrict_fraction_length(false), exp_to_root(false), preserve_precision(false), interval_display(INTERVAL_DISPLAY_INTERVAL), digit_grouping(DIGIT_GROUPING_NONE), date_time_format(DATE_TIME_FORMAT_ISO), time_zone(TIME_ZONE_LOCAL), custom_time_zone(0), twos_complement(true), hexadecimal_twos_complement(false), binary_bits(0) {}
+PrintOptions::PrintOptions() : min_exp(EXP_PRECISION), base(BASE_DECIMAL), base_display(BASE_DISPLAY_NONE), lower_case_numbers(false), lower_case_e(false), number_fraction_format(FRACTION_DECIMAL), indicate_infinite_series(false), show_ending_zeroes(true), abbreviate_names(true), use_reference_names(false), place_units_separately(true), use_unit_prefixes(true), use_prefixes_for_all_units(false), use_prefixes_for_currencies(false), use_all_prefixes(false), use_denominator_prefix(true), negative_exponents(false), short_multiplication(true), limit_implicit_multiplication(false), allow_non_usable(false), use_unicode_signs(false), multiplication_sign(MULTIPLICATION_SIGN_DOT), division_sign(DIVISION_SIGN_DIVISION_SLASH), spacious(true), excessive_parenthesis(false), halfexp_to_sqrt(true), min_decimals(0), max_decimals(-1), use_min_decimals(true), use_max_decimals(true), round_halfway_to_even(false), improve_division_multipliers(true), prefix(NULL), is_approximate(NULL), can_display_unicode_string_function(NULL), can_display_unicode_string_arg(NULL), hide_underscore_spaces(false), preserve_format(false), allow_factorization(false), spell_out_logical_operators(false), restrict_to_parent_precision(true), restrict_fraction_length(false), exp_to_root(false), preserve_precision(false), interval_display(INTERVAL_DISPLAY_INTERVAL), digit_grouping(DIGIT_GROUPING_NONE), date_time_format(DATE_TIME_FORMAT_ISO), time_zone(TIME_ZONE_LOCAL), custom_time_zone(0), twos_complement(true), hexadecimal_twos_complement(false), binary_bits(0), exp_display(EXP_DEFAULT), duodecimal_symbols(false), rounding(ROUNDING_HALF_AWAY_FROM_ZERO) {}
 
 const string &PrintOptions::comma() const {if(comma_sign.empty()) return CALCULATOR->getComma(); return comma_sign;}
 const string &PrintOptions::decimalpoint() const {if(decimalpoint_sign.empty()) return CALCULATOR->getDecimalPoint(); return decimalpoint_sign;}
 
 InternalPrintStruct::InternalPrintStruct() : depth(0), power_depth(0), division_depth(0), wrap(false), num(NULL), den(NULL), re(NULL), im(NULL), exp(NULL), minus(NULL), exp_minus(NULL), parent_approximate(false), parent_precision(-1), iexp(NULL) {}
 
-ParseOptions::ParseOptions() : variables_enabled(true), functions_enabled(true), unknowns_enabled(true), units_enabled(true), rpn(false), base(BASE_DECIMAL), limit_implicit_multiplication(false), read_precision(DONT_READ_PRECISION), dot_as_separator(false), brackets_as_parentheses(false), angle_unit(ANGLE_UNIT_NONE), unended_function(NULL), preserve_format(false), default_dataset(NULL), parsing_mode(PARSING_MODE_ADAPTIVE), twos_complement(false), hexadecimal_twos_complement(false) {}
+ParseOptions::ParseOptions() : variables_enabled(true), functions_enabled(true), unknowns_enabled(true), units_enabled(true), rpn(false), base(BASE_DECIMAL), limit_implicit_multiplication(false), read_precision(DONT_READ_PRECISION), dot_as_separator(false), brackets_as_parentheses(false), angle_unit(ANGLE_UNIT_NONE), unended_function(NULL), preserve_format(false), default_dataset(NULL), parsing_mode(PARSING_MODE_ADAPTIVE), twos_complement(false), hexadecimal_twos_complement(false), binary_bits(0) {}
 
 EvaluationOptions::EvaluationOptions() : approximation(APPROXIMATION_TRY_EXACT), sync_units(true), sync_nonlinear_unit_relations(true), keep_prefixes(false), calculate_variables(true), calculate_functions(true), test_comparisons(true), isolate_x(true), expand(true), combine_divisions(false), reduce_divisions(true), allow_complex(true), allow_infinite(true), assume_denominators_nonzero(true), warn_about_denominators_assumed_nonzero(false), split_squares(true), keep_zero_units(true), auto_post_conversion(POST_CONVERSION_OPTIMAL), mixed_units_conversion(MIXED_UNITS_CONVERSION_DEFAULT), structuring(STRUCTURING_SIMPLIFY), isolate_var(NULL), do_polynomial_division(true), protected_function(NULL), complex_number_form(COMPLEX_NUMBER_FORM_RECTANGULAR), local_currency_conversion(true), transform_trigonometric_functions(true), interval_calculation(INTERVAL_CALCULATION_VARIANCE_FORMULA) {}
 
@@ -139,6 +143,10 @@ extern gmp_randstate_t randstate;
 
 #define BITWISE_XOR "⊻"
 
+#ifdef _MSC_VER
+#	define strdup _strdup
+#endif
+
 Calculator::Calculator() {
 	b_ignore_locale = false;
 
@@ -149,13 +157,14 @@ Calculator::Calculator() {
 		ULONG nlang = 0;
 		DWORD n = 0;
 		if(GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &nlang, NULL, &n)) {
-			WCHAR wlocale[n];
+			WCHAR* wlocale = new WCHAR[n];
 			if(GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &nlang, wlocale, &n)) {
 				string lang = utf8_encode(wlocale);
 				gsub("-", "_", lang);
 				if(lang.length() > 5) lang = lang.substr(0, 5);
 				if(!lang.empty()) _putenv_s("LANG", lang.c_str());
 			}
+			delete[] wlocale;
 		}
 	}
 #endif
@@ -189,13 +198,13 @@ Calculator::Calculator() {
 	srand(time(NULL));
 
 	exchange_rates_time[0] = 0;
-	exchange_rates_time[1] = (time_t) 470688L * (time_t) 3600;
+	exchange_rates_time[1] = (time_t) 481104L * (time_t) 3600;
 	exchange_rates_time[2] = 0;
-	priv->exchange_rates_time2[0] = (time_t) 470688L * (time_t) 3600;
+	priv->exchange_rates_time2[0] = (time_t) 481104L * (time_t) 3600;
 	exchange_rates_check_time[0] = 0;
-	exchange_rates_check_time[1] = (time_t) 470688L * (time_t) 3600;
+	exchange_rates_check_time[1] = (time_t) 481104L * (time_t) 3600;
 	exchange_rates_check_time[2] = 0;
-	priv->exchange_rates_check_time2[0] = (time_t) 470688L * (time_t) 3600;
+	priv->exchange_rates_check_time2[0] = (time_t) 481104L * (time_t) 3600;
 	b_exchange_rates_warning_enabled = true;
 	b_exchange_rates_used = 0;
 	priv->exchange_rates_url3 = 0;
@@ -237,6 +246,7 @@ Calculator::Calculator() {
 	addStringAlternative("∧", BITWISE_AND);
 	addStringAlternative("∨", BITWISE_OR);
 	addStringAlternative("¬", BITWISE_NOT);
+	addStringAlternative("…", "...");
 
 	//division operator
 	per_str = _("per");
@@ -360,6 +370,7 @@ Calculator::Calculator() {
 	u_rad = NULL; u_gra = NULL; u_deg = NULL;
 	priv->custom_angle_unit = NULL;
 
+	priv->simplified_percentage_used = false;
 	b_save_called = false;
 
 	ILLEGAL_IN_NAMES = "\a\b" + DOT_S + RESERVED OPERATORS SEXADOT SPACES PARENTHESISS VECTOR_WRAPS COMMAS;
@@ -409,13 +420,14 @@ Calculator::Calculator(bool ignore_locale) {
 			ULONG nlang = 0;
 			DWORD n = 0;
 			if(GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &nlang, NULL, &n)) {
-				WCHAR wlocale[n];
+				WCHAR* wlocale = new WCHAR[n];
 				if(GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &nlang, wlocale, &n)) {
 					string lang = utf8_encode(wlocale);
 					gsub("-", "_", lang);
 					if(lang.length() > 5) lang = lang.substr(0, 5);
 					if(!lang.empty()) _putenv_s("LANG", lang.c_str());
 				}
+				delete[] wlocale;
 			}
 		}
 #endif
@@ -449,13 +461,13 @@ Calculator::Calculator(bool ignore_locale) {
 	srand(time(NULL));
 
 	exchange_rates_time[0] = 0;
-	exchange_rates_time[1] = (time_t) 470688L * (time_t) 3600;
+	exchange_rates_time[1] = (time_t) 481104L * (time_t) 3600;
 	exchange_rates_time[2] = 0;
-	priv->exchange_rates_time2[0] = (time_t) 470688L * (time_t) 3600;
+	priv->exchange_rates_time2[0] = (time_t) 481104L * (time_t) 3600;
 	exchange_rates_check_time[0] = 0;
-	exchange_rates_check_time[1] = (time_t) 470688L * (time_t) 3600;
+	exchange_rates_check_time[1] = (time_t) 481104L * (time_t) 3600;
 	exchange_rates_check_time[2] = 0;
-	priv->exchange_rates_check_time2[0] = (time_t) 470688L * (time_t) 3600;
+	priv->exchange_rates_check_time2[0] = (time_t) 481104L * (time_t) 3600;
 	b_exchange_rates_warning_enabled = true;
 	b_exchange_rates_used = 0;
 	priv->exchange_rates_url3 = 0;
@@ -497,6 +509,7 @@ Calculator::Calculator(bool ignore_locale) {
 	addStringAlternative("∧", BITWISE_AND);
 	addStringAlternative("∨", BITWISE_OR);
 	addStringAlternative("¬", BITWISE_NOT);
+	addStringAlternative("…", "...");
 
 	per_str = _("per");
 	per_str_len = per_str.length();
@@ -614,6 +627,7 @@ Calculator::Calculator(bool ignore_locale) {
 	u_rad = NULL; u_gra = NULL; u_deg = NULL;
 	priv->custom_angle_unit = NULL;
 
+	priv->simplified_percentage_used = false;
 	b_save_called = false;
 
 	ILLEGAL_IN_NAMES = "\a\b" + DOT_S + RESERVED OPERATORS SEXADOT SPACES PARENTHESISS VECTOR_WRAPS COMMAS;
@@ -656,6 +670,7 @@ Calculator::~Calculator() {
 	delete calculate_thread;
 	calculator = NULL;
 	gmp_randclear(randstate);
+	mpfr_free_cache();
 #ifdef HAVE_ICU
 	if(ucm) ucasemap_close(ucm);
 #endif
@@ -689,7 +704,7 @@ Unit *Calculator::getDegUnit() {
 	return u_deg;
 }
 
-bool Calculator::utf8_pos_is_valid_in_name(char *pos) {
+bool Calculator::utf8_pos_is_valid_in_name(char *pos) const {
 	if(is_in(ILLEGAL_IN_NAMES, pos[0])) {
 		return false;
 	}
@@ -1026,6 +1041,11 @@ MathFunction *Calculator::getFunction(size_t index) const {
 void Calculator::setDefaultAssumptions(Assumptions *ass) {
 	if(default_assumptions) delete default_assumptions;
 	default_assumptions = ass;
+	if(!default_assumptions) {
+		default_assumptions = new Assumptions;
+		default_assumptions->setType(ASSUMPTION_TYPE_REAL);
+		default_assumptions->setSign(ASSUMPTION_SIGN_UNKNOWN);
+	}
 }
 Assumptions *Calculator::defaultAssumptions() {
 	return default_assumptions;
@@ -1456,6 +1476,13 @@ Unit *Calculator::customAngleUnit() {
 	return priv->custom_angle_unit;
 }
 
+bool Calculator::simplifiedPercentageUsed() const {
+	return priv->simplified_percentage_used;
+}
+void Calculator::setSimplifiedPercentageUsed(bool percentage_used) {
+	priv->simplified_percentage_used = percentage_used;
+}
+
 void Calculator::setCustomInputBase(Number nr) {
 	priv->custom_input_base = nr;
 	if(!nr.isReal()) {
@@ -1560,15 +1587,35 @@ void Calculator::unsetLocale() {
 }
 
 void Calculator::resetVariables() {
-	variables.clear();
+	for(size_t i = 0; i < variables.size();) {
+		size_t n = variables.size();
+		variables[i]->destroy();
+		if(n == variables.size()) i++;
+	}
+	if(v_C) v_C->destroy();
 	addBuiltinVariables();
 }
 void Calculator::resetFunctions() {
-	functions.clear();
+	for(size_t i = 0; i < functions.size();) {
+		size_t n = functions.size();
+		functions[i]->destroy();
+		if(n == functions.size()) i++;
+	}
 	addBuiltinFunctions();
 }
 void Calculator::resetUnits() {
-	units.clear();
+	for(unordered_map<Unit*, MathStructure*>::iterator it = priv->composite_unit_base.begin(); it != priv->composite_unit_base.end(); ++it) it->second->unref();
+	for(size_t i = 0; i < units.size();) {
+		size_t n = units.size();
+		units[i]->destroy();
+		if(n == units.size()) i++;
+	}
+	for(size_t i = 0; i < prefixes.size(); i++) {
+		delPrefixUFV(prefixes[i]);
+		delete prefixes[i];
+	}
+	priv->composite_unit_base.clear();
+	prefixes.clear();
 	addBuiltinUnits();
 }
 void Calculator::reset() {
@@ -1656,6 +1703,7 @@ void Calculator::addBuiltinFunctions() {
 	priv->f_vertcat = addFunction(new VertCatFunction());
 	priv->f_horzcat = addFunction(new HorzCatFunction());
 	addFunction(new KroneckerProductFunction());
+	addFunction(new FlipFunction());
 
 	f_factorial = addFunction(new FactorialFunction());
 	f_factorial2 = addFunction(new DoubleFactorialFunction());
@@ -1668,6 +1716,9 @@ void Calculator::addBuiltinFunctions() {
 	f_odd = addFunction(new OddFunction());
 	f_shift = addFunction(new ShiftFunction());
 	f_bitcmp = addFunction(new BitCmpFunction());
+	addFunction(new BitSetFunction());
+	addFunction(new BitGetFunction());
+	addFunction(new SetBitsFunction());
 	addFunction(new CircularShiftFunction());
 
 	f_abs = addFunction(new AbsFunction());
@@ -1696,6 +1747,10 @@ void Calculator::addBuiltinFunctions() {
 	addFunction(new TotientFunction());
 	priv->f_parallel = addFunction(new ParallelFunction());
 
+	addFunction(new IntegerDigitsFunction());
+	addFunction(new DigitGetFunction());
+	addFunction(new DigitSetFunction());
+
 	f_polynomial_unit = addFunction(new PolynomialUnitFunction());
 	f_polynomial_primpart = addFunction(new PolynomialPrimpartFunction());
 	f_polynomial_content = addFunction(new PolynomialContentFunction());
@@ -1721,12 +1776,15 @@ void Calculator::addBuiltinFunctions() {
 	f_sqrt = addFunction(new SqrtFunction());
 	f_cbrt = addFunction(new CbrtFunction());
 	f_root = addFunction(new RootFunction());
+	addFunction(new AllRootsFunction());
 	f_sq = addFunction(new SquareFunction());
 
 	f_exp = addFunction(new ExpFunction());
 
 	f_ln = addFunction(new LogFunction());
 	f_logn = addFunction(new LognFunction());
+
+	addFunction(new PowerTowerFunction());
 
 	f_lambert_w = addFunction(new LambertWFunction());
 
@@ -1814,6 +1872,7 @@ void Calculator::addBuiltinFunctions() {
 	f_stripunits = addFunction(new StripUnitsFunction());
 
 	f_genvector = addFunction(new GenerateVectorFunction());
+	priv->f_colon = addFunction(new ColonFunction());
 	f_for = addFunction(new ForFunction());
 	f_sum = addFunction(new SumFunction());
 	f_product = addFunction(new ProductFunction());
@@ -1835,10 +1894,16 @@ void Calculator::addBuiltinFunctions() {
 	f_error = addFunction(new ErrorFunction());
 	f_warning = addFunction(new WarningFunction());
 	f_message = addFunction(new MessageFunction());
+	addFunction(new ForEachFunction());
 
 	f_save = addFunction(new SaveFunction());
+#ifndef DISABLE_INSECURE
 	f_load = addFunction(new LoadFunction());
 	f_export = addFunction(new ExportFunction());
+#else
+	f_load = NULL;
+	f_export = NULL;
+#endif
 
 	f_register = addFunction(new RegisterFunction());
 	f_stack = addFunction(new StackFunction());
@@ -1892,11 +1957,11 @@ void Calculator::addBuiltinFunctions() {
 }
 void Calculator::addBuiltinUnits() {
 	u_euro = addUnit(new Unit(_("Currency"), "EUR", "euros", "euro", "European Euros", false, true, true));
-	u_btc = addUnit(new AliasUnit(_("Currency"), "BTC", "bitcoins", "bitcoin", "Bitcoins", u_euro, "26127.56", 1, "", false, true, true));
+	u_btc = addUnit(new AliasUnit(_("Currency"), "BTC", "bitcoins", "bitcoin", "Bitcoins", u_euro, "85461.8", 1, "", false, true, true));
 	u_btc->setApproximate();
 	u_btc->setPrecision(-2);
 	u_btc->setChanged(false);
-	priv->u_byn = addUnit(new AliasUnit(_("Currency"), "BYN", "", "", "Belarusian Ruble", u_euro, "1/2.68918", 1, "", false, true, true));
+	priv->u_byn = addUnit(new AliasUnit(_("Currency"), "BYN", "", "", "Belarusian Ruble", u_euro, "1/3.46482", 1, "", false, true, true));
 	priv->u_byn->setHidden(true);
 	priv->u_byn->setApproximate();
 	priv->u_byn->setPrecision(-2);
@@ -2711,16 +2776,16 @@ MathFunction* Calculator::getActiveFunction(string name_) {
 	}
 	return NULL;
 }
-bool Calculator::variableNameIsValid(const string &name_) {
+bool Calculator::variableNameIsValid(const string &name_) const {
 	return !name_.empty() && name_.find_first_of(ILLEGAL_IN_NAMES) == string::npos && is_not_in(NUMBERS, name_[0]);
 }
-bool Calculator::functionNameIsValid(const string &name_) {
+bool Calculator::functionNameIsValid(const string &name_) const {
 	return !name_.empty() && name_.find_first_of(ILLEGAL_IN_NAMES) == string::npos && is_not_in(NUMBERS, name_[0]);
 }
-bool Calculator::unitNameIsValid(const string &name_) {
+bool Calculator::unitNameIsValid(const string &name_) const {
 	return !name_.empty() && name_.find_first_of(ILLEGAL_IN_UNITNAMES) == string::npos;
 }
-bool Calculator::variableNameIsValid(const char *name_) {
+bool Calculator::variableNameIsValid(const char *name_) const {
 	if(strlen(name_) == 0) return false;
 	if(is_in(NUMBERS, name_[0])) return false;
 	for(size_t i = 0; name_[i] != '\0'; i++) {
@@ -2728,7 +2793,7 @@ bool Calculator::variableNameIsValid(const char *name_) {
 	}
 	return true;
 }
-bool Calculator::functionNameIsValid(const char *name_) {
+bool Calculator::functionNameIsValid(const char *name_) const {
 	if(strlen(name_) == 0) return false;
 	if(is_in(NUMBERS, name_[0])) return false;
 	for(size_t i = 0; name_[i] != '\0'; i++) {
@@ -2736,7 +2801,7 @@ bool Calculator::functionNameIsValid(const char *name_) {
 	}
 	return true;
 }
-bool Calculator::unitNameIsValid(const char *name_) {
+bool Calculator::unitNameIsValid(const char *name_) const {
 	if(strlen(name_) == 0) return false;
 	for(size_t i = 0; name_[i] != '\0'; i++) {
 		if(is_in(ILLEGAL_IN_UNITNAMES, name_[i])) return false;
@@ -2806,7 +2871,7 @@ bool Calculator::unitNameIsValid(const char *name_, int version_numbers[3], bool
 	}
 	return true;
 }
-string Calculator::convertToValidVariableName(string name_) {
+string Calculator::convertToValidVariableName(string name_) const {
 	if(name_.empty()) return "var_1";
 	size_t i = 0;
 	while(true) {
@@ -2821,11 +2886,11 @@ string Calculator::convertToValidVariableName(string name_) {
 	}
 	return name_;
 }
-string Calculator::convertToValidFunctionName(string name_) {
+string Calculator::convertToValidFunctionName(string name_) const {
 	if(name_.empty()) return "func_1";
 	return convertToValidVariableName(name_);
 }
-string Calculator::convertToValidUnitName(string name_) {
+string Calculator::convertToValidUnitName(string name_) const {
 	if(name_.empty()) return "new_unit";
 	size_t i = 0;
 	string stmp = ILLEGAL_IN_NAMES_MINUS_SPACE_STR + NUMBERS;

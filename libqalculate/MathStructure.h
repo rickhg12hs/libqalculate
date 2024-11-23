@@ -1,7 +1,7 @@
 /*
     Qalculate (library)
 
-    Copyright (C) 2003-2007, 2008, 2016-2018  Hanna Knutsson (hanna.knutsson@protonmail.com)
+    Copyright (C) 2003-2007, 2008, 2016-2024  Hanna Knutsson (hanna.knutsson@protonmail.com)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,7 +15,9 @@
 #include <libqalculate/includes.h>
 #include <libqalculate/Number.h>
 #include <libqalculate/QalculateDateTime.h>
-#include <sys/time.h>
+#ifndef _MSC_VER
+#	include <sys/time.h>
+#endif
 
 class QalculateDate;
 
@@ -175,7 +177,14 @@ class MathStructure {
 		bool b_parentheses;
 
 		bool isolate_x_sub(const EvaluationOptions &eo, EvaluationOptions &eo2, const MathStructure &x_var, MathStructure *morig = NULL);
+		bool isolate_x_sub(const EvaluationOptions &eo, EvaluationOptions &eo2, const MathStructure &x_var, MathStructure *morig, size_t depth);
+		bool isolate_x(const EvaluationOptions &eo, const EvaluationOptions &feo, const MathStructure &x_var, bool check_result, size_t depth);
+
+		bool calculateFunctions(const EvaluationOptions &eo, bool recursive, bool do_unformat, size_t depth);
+
 		void init();
+
+		class MathStructure_p *priv;
 
 	public:
 
@@ -204,12 +213,12 @@ class MathStructure {
 		MathStructure(std::string sym, bool force_symbol = false);
 		/** Create a new date and time structure.
 		*
-		* @param sym Date and time value.
+		* @param o_dt Date and time value.
 		*/
 		MathStructure(const QalculateDateTime &o_dt);
 		/** Create a new numeric structure with floating point value. Uses Number::setFloat().
 		*
-		* @param o Numeric value.
+		* @param float_value Numeric value.
 		*/
 		MathStructure(double float_value);
 		/** Create a new vector.
@@ -268,20 +277,20 @@ class MathStructure {
 		void set(long int num, long int den, long int exp10 = 0L, bool preserve_precision = false);
 		/** Set the structure to a symbolic/text value.
 		*
-		* @param o The new symolic/text value.
+		* @param sym The new symolic/text value.
 		* @param preserve_precision Preserve the current precision.
 		* @param force_symbol Do not check for undefined or date value.
 		*/
 		void set(std::string sym, bool preserve_precision = false, bool force_symbol = false);
 		/** Set the structure to a date and time value.
 		*
-		* @param o The new data and time value.
+		* @param o_dt The new data and time value.
 		* @param preserve_precision Preserve the current precision.
 		*/
 		void set(const QalculateDateTime &o_dt, bool preserve_precision = false);
 		/** Set the structure to a number with a floating point value. Uses Number::setFloat().
 		*
-		* @param o The new numeric value.
+		* @param float_value The new numeric value.
 		* @param preserve_precision Preserve the current precision (unless the new value has a lower precision).
 		*/
 		void set(double float_value, bool preserve_precision = false);
@@ -521,6 +530,7 @@ class MathStructure {
 		bool representsReal(bool allow_units = false) const;
 		bool representsNonComplex(bool allow_units = false) const;
 		bool representsComplex(bool allow_units = false) const;
+		bool representsFinite(bool allow_units = false) const;
 		bool representsNonZero(bool allow_units = false) const;
 		bool representsZero(bool allow_units = false) const;
 		bool representsApproximatelyZero(bool allow_units = false) const;
@@ -764,6 +774,7 @@ class MathStructure {
 
 		bool rankVector(bool ascending = true);
 		bool sortVector(bool ascending = true);
+		void flipVector();
 
 		MathStructure &getRange(int start, int end, MathStructure &mstruct) const;
 
@@ -917,5 +928,8 @@ class MathStructure {
 };
 
 std::ostream& operator << (std::ostream &os, const MathStructure&);
+
+int has_information_unit(const MathStructure &m, bool top = true);
+bool is_unit_multiexp(const MathStructure &mstruct);
 
 #endif

@@ -65,7 +65,7 @@
     </unit>
     <unit type="alias">
       <_title>Nautical Mile</_title>
-      <_names>r:nautical_mile,p:nautical_miles</_names>
+      <_names>r:nautical_mile,p:nautical_miles,a:nmi</_names>
       <base>
         <unit>m</unit>
         <relation>1852</relation>
@@ -171,7 +171,7 @@
     <unit type="alias">
       <_title>U.S. Survey Rod</_title>
       <system>US Survey</system>
-      <_names>ar:US_rd,US_rod,p:rUS_ods</_names>
+      <_names>ar:US_rd,US_rod,p:US_rods</_names>
       <base>
         <unit>US_ft</unit>
         <relation>16.5</relation>
@@ -263,12 +263,48 @@
       </base>
     </unit>
     <unit type="alias">
+      <_title>Light Second</_title>
+      <_names>r:light_second,p:light_seconds</_names>
+      <base>
+        <unit>ly</unit>
+        <relation>1/31557600</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Light Minute</_title>
+      <_names>r:light_minute,p:light_minutes</_names>
+      <base>
+        <unit>light_second</unit>
+        <relation>60</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Light Hour</_title>
+      <_names>r:light_hour,p:light_hours</_names>
+      <base>
+        <unit>light_minute</unit>
+        <relation>60</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
       <_title>Parsec</_title>
       <_names>ar:pc,parsec,p:parsecs</_names>
       <use_with_prefixes>true</use_with_prefixes>
       <base>
         <unit>AU</unit>
         <relation>648000/pi</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Solar Radius (nominal)</_title>
+      <_names>r:solar_radius,au:R_&#x2609;</_names>
+      <base>
+        <unit>m</unit>
+        <relation>695700000</relation>
         <exponent>1</exponent>
       </base>
     </unit>
@@ -441,7 +477,7 @@
       </unit>
       <unit type="alias">
         <_title>Turn</_title>
-        <_names>r:turn,p:turns</_names>
+        <_names>a:tr,r:turn,p:turns,a:pla,a:rev,revolution,p:revolutions,a:cyc,cycle,p:cycles</_names>
         <base>
           <unit>deg</unit>
           <relation>360</relation>
@@ -505,6 +541,30 @@
           <prefix>0</prefix>
           <exponent>-1</exponent>
         </part>
+      </unit>
+      <unit type="composite">
+        <hidden>true</hidden>
+        <title>Revolutions per Minute</title>
+        <names>r:turn_p_min</names>
+        <part>
+          <unit>turn</unit>
+          <prefix>0</prefix>
+          <exponent>1</exponent>
+        </part>
+        <part>
+          <unit>min</unit>
+          <prefix>0</prefix>
+          <exponent>-1</exponent>
+        </part>
+      </unit>
+      <unit type="alias">
+        <_title>Revolutions per Minute (RPM)</_title>
+        <_names>ar:rpm</_names>
+        <base>
+          <unit>turn_p_min</unit>
+          <relation>1</relation>
+          <exponent>1</exponent>
+        </base>
       </unit>
     </category>
   </category>
@@ -760,6 +820,15 @@
         <exponent>1</exponent>
       </part>
     </unit>
+    <unit type="alias">
+      <_title>Solar Mass</_title>
+      <_names>r:solar_mass,au:M_&#x2609;</_names>
+      <base>
+        <unit>g</unit>
+        <relation>1.988470(70)E33</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
     <category>
       <_title>Density</_title>
       <unit type="composite">
@@ -902,6 +971,7 @@
     <unit type="alias">
       <_title>Julian Year</_title>
       <_names>r:year,p:years,as:a_j,a:yr,annus</_names>
+      <_description>Acts as calendar years when added to or subtracted from dates, but as exactly 365.25 days when converted to other units. Use the yearfrac() function, instead of subtraction, to calculate the exact number of calendar years between two dates.</_description>
       <base>
         <unit>d</unit>
         <relation>365.25</relation>
@@ -911,7 +981,7 @@
     </unit>
     <unit type="alias">
       <_title>Mean Gregorian Year</_title>
-      <_names>ars:a_g, gregorian_year</_names>
+      <_names>ars:a_g,gregorian_year,p:gregorian_years</_names>
       <base>
         <unit>d</unit>
         <relation>365.2425</relation>
@@ -920,19 +990,10 @@
     </unit>
     <unit type="alias">
       <_title>Mean Tropical Year</_title>
-      <_names>ars:a_t, tropical_year</_names>
+      <_names>ars:a_t,tropical_year,p:tropical_years</_names>
       <base>
         <unit>d</unit>
         <relation>365.24219</relation>
-        <exponent>1</exponent>
-      </base>
-    </unit>
-    <unit type="alias">
-      <_title>Tropical Year in Year 2000</_title>
-      <_names>ars:a_2000, tropical_year_2000</_names>
-      <base>
-        <unit>s</unit>
-        <relation>1556925.445</relation>
         <exponent>1</exponent>
       </base>
     </unit>
@@ -3659,10 +3720,19 @@
     </unit>
     <unit type="alias">
       <_title>Calorie (international table)</_title>
-      <_names>ais:cal_IT,ar:cal,c:calorie,cp:calories</_names>
+      <_names>ars:cal_IT</_names>
       <base>
         <unit>J</unit>
         <relation>4.1868</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Calorie (thermochemical)</_title>
+      <_names>airs:cal_th,a:cal,c:calorie,cp:calories</_names>
+      <base>
+        <unit>J</unit>
+        <relation>4.184</relation>
         <exponent>1</exponent>
       </base>
     </unit>
@@ -3681,15 +3751,6 @@
       <base>
         <unit>cal</unit>
         <relation>1000</relation>
-        <exponent>1</exponent>
-      </base>
-    </unit>
-    <unit type="alias">
-      <_title>Calorie (thermochemical)</_title>
-      <_names>ars:cal_th</_names>
-      <base>
-        <unit>J</unit>
-        <relation>4.184</relation>
         <exponent>1</exponent>
       </base>
     </unit>
@@ -3730,11 +3791,56 @@
       </base>
     </unit>
     <unit type="alias">
+      <_title>Calorie (IUNS)</_title>
+      <_names>ars:cal_IUNS</_names>
+      <base>
+        <unit>J</unit>
+        <relation>4.182</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
       <_title>British Thermal Unit (IT)</_title>
       <_names>ar:Btu</_names>
       <base>
+        <unit>cal_IT</unit>
+        <relation>45359237/180000</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Therm (IT)</_title>
+      <_names>r:therm,p:therms,a:thm</_names>
+      <base>
+        <unit>Btu</unit>
+        <relation>100000</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Therm (ISO)</_title>
+      <_names>r:therm_ISO,p:therms_ISO,a:thm_ISO</_names>
+      <base>
         <unit>J</unit>
-        <relation>1055.056</relation>
+        <relation>105506000</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Therm (U.S.)</_title>
+      <_names>r:therm_US,p:therms_US,a:thm_US</_names>
+      <base>
+        <unit>J</unit>
+        <relation>105480400</relation>
+        <exponent>1</exponent>
+      </base>
+    </unit>
+    <unit type="alias">
+      <_title>Thermie</_title>
+      <_names>r:thermie,p:thermies,a:th</_names>
+      <base>
+        <unit>cal_IT</unit>
+        <relation>1E6</relation>
         <exponent>1</exponent>
       </base>
     </unit>
@@ -3927,6 +4033,15 @@
           <prefix>0</prefix>
           <exponent>-1</exponent>
         </part>
+      </unit>
+      <unit type="alias">
+        <_title>Solar Luminosity (nominal)</_title>
+        <_names>r:solar_luminosity,au:L_&#x2609;</_names>
+        <base>
+          <unit>W</unit>
+          <relation>3.828E26</relation>
+          <exponent>1</exponent>
+        </base>
       </unit>
     </category>
     <category>

@@ -1,7 +1,7 @@
 /*
     Qalculate
 
-    Copyright (C) 2003-2007, 2008, 2016-2019  Hanna Knutsson (hanna.knutsson@protonmail.com)
+    Copyright (C) 2003-2007, 2008, 2016-2024  Hanna Knutsson (hanna.knutsson@protonmail.com)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -25,9 +25,13 @@
 #include "Number.h"
 
 #include <locale.h>
-#include <unistd.h>
+#ifdef _MSC_VER
+#	include <sys/utime.h>
+#else
+#	include <unistd.h>
+#	include <utime.h>
+#endif
 #include <time.h>
-#include <utime.h>
 #include <sys/types.h>
 
 using std::string;
@@ -337,6 +341,231 @@ MathStructure Calculator::convert(const MathStructure &mstruct, KnownVariable *t
 	cleanMessages(mstruct, n_messages + 1);
 	return mstruct_new;
 }
+
+bool cu_power_equals(const MathStructure &mp, MathStructure &mr) {
+	if(mr.isPower()) {
+		if((mp.isInverse() || (mp.isDivision() && mp[0].isOne())) && mr[1].number().isNegative()) {
+			size_t i = (mp.isDivision() ? 1 : 0);
+			if(mp[i].isPower()) {
+				if(mp[i][0] != mr[0]) return false;
+				mr[1].number().negate();
+				bool b = mp[i][1].number().equals(mr[1].number(), true);
+				mr[1].number().negate();
+				return b;
+			} else {
+				return mr[0] == mp[i] && mr[1].isMinusOne();
+			}
+		} else if(mp.isPower()) {
+			if(mp[0] != mr[0]) return false;
+			if(mp[1].isNegate() && mp[1][0].isNumber() && mr[1].number().isNegative()) {
+				mr[1].number().negate();
+				bool b = mp[1][0].number().equals(mr[1].number(), true);
+				mr[1].number().negate();
+				return b;
+			} else {
+				return mp[1].equals(mr[1], true);
+			}
+		}
+		return false;
+	}
+	return mr == mp;
+}
+bool cu_contains_nonunit(const MathStructure &mp, size_t ip = 0, bool top = true) {
+	if(top && mp.isUnit_exp()) return false;
+	for(size_t i = ip; i < mp.size(); i++) {
+		if(mp[i].isInverse() || mp[i].isDivision() || mp[i].isMultiplication()) {
+			if(cu_contains_nonunit(mp[i], top && i == 0 && !mp[i].isInverse() && mp[i][0].isNumber() ? 1 : 0, false)) return true;
+		} else if(mp[i].isPower()) {
+			if(cu_contains_nonunit(mp[i][0], 0, false)) return true;
+		} else if(!mp[i].isUnit()) {
+			return true;
+		}
+	}
+	return mp.size() == 0 && !mp.isUnit();
+}
+void cu_fix_formatted(MathStructure &m) {
+	if(m.isInverse()) {
+		if(m[0].isPower() && m[0][1].isNumber()) {
+			m.setToChild(1);
+			m[1].number().negate();
+		} else if(m[0].isMultiplication()) {
+			m.setToChild(1);
+			for(size_t i = 0; i < m.size(); i++) {
+				if(m[i].isPower() && m[i][1].isNumber()) m[i][1].number().negate();
+				else m[i].raise(m_minus_one);
+			}
+		} else {
+			m.addChild(m_minus_one);
+			m.setType(STRUCT_POWER);
+		}
+		cu_fix_formatted(m);
+	} else if(m.isDivision()) {
+		if(m[1].isPower() && m[1][1].isNumber()) {
+			m[1][1].number().negate();
+		} else if(m[1].isMultiplication()) {
+			for(size_t i = 0; i < m[1].size(); i++) {
+				if(m[1][i].isPower() && m[1][i][1].isNumber()) m[1][i][1].number().negate();
+				else m[1][i].raise(m_minus_one);
+			}
+		} else {
+			m[1].raise(m_minus_one);
+		}
+		if(m[0].isOne()) m.setToChild(2);
+		else m.setType(STRUCT_MULTIPLICATION);
+		cu_fix_formatted(m);
+	} else if(m.isNegate() && m[0].isNumber()) {
+		m[0].number().negate();
+		m.setToChild(1);
+	} else if(m.isPower()) {
+		cu_fix_formatted(m[1]);
+		if(m[0].isMultiplication()) {
+			for(size_t i = 0; i < m[0].size(); i++) {
+				m[0][i].raise(m[1]);
+			}
+			m.setToChild(1);
+			cu_fix_formatted(m);
+		} else {
+			cu_fix_formatted(m[0]);
+		}
+	} else if(m.isMultiplication()) {
+		for(size_t i = 0; i < m.size();) {
+			cu_fix_formatted(m[i]);
+			if(m[i].isOne()) {
+				m.delChild(i + 1);
+			} else if(m[i].isMultiplication()) {
+				for(size_t i2 = 0; i2 < m[i].size(); i2++) {
+					m[i][i2].ref();
+					m.insertChild_nocopy(&m[i][i2], i + i2 + 2);
+				}
+				m.delChild(i + 1);
+			} else {
+				i++;
+			}
+		}
+		if(m.size() == 1) m.setToChild(1);
+	}
+}
+void convert_unchanged_quantity_with_unit(const MathStructure &mp, MathStructure &mr, EvaluationOptions &eo) {
+	bool b = false;
+	if((mr.isUnit() || (mr.isPower() && mr[0].isUnit() && mr[1].isInteger() && mr[1].number().integerLength() <= 2)) && (cu_power_equals(mp, mr) || (mp.isMultiplication() && mp.size() == 2 && cu_power_equals(mp[1], mr) && mp[0].isOne()))) {
+		b = true;
+	} else if(mr.isMultiplication() && mr.size() > 1 && ((mp.isMultiplication() && mp.size() > 1) || mp.isDivision())) {
+		size_t ir = 0, ip = 0;
+		bool nested = false;
+		if(mr[0].isNumber()) {
+			ir = 1;
+			if(mp[0].isMultiplication()) {
+				if(mp[0][0].isNumber()) {
+					b = mp[0][0].number().equals(mr[0].number(), true);
+				} else if(mp[0][0].isNegate() && mr[0].number().isNegative()) {
+					mr[0].number().negate();
+					b = mp[0][0][0].number().equals(mr[0].number(), true);
+					mr[0].number().negate();
+				}
+				nested = true;
+			} else {
+				if(mp[0].isNumber()) {
+					b = mp[0].number().equals(mr[0].number(), true);
+				} else if(mp[0].isNegate() && mr[0].number().isNegative()) {
+					mr[0].number().negate();
+					b = mp[0][0].number().equals(mr[0].number(), true);
+					mr[0].number().negate();
+				}
+				ip = 1;
+			}
+		} else if(mr[0].isUnknown()) {
+			b = !mp.isDivision() && (mr[0] == mp[0]);
+			ir = 1;
+			ip = 1;
+		} else if(mp[0].isOne()) {
+			if(mp.isDivision()) nested = true;
+			else ip = 1;
+			b = true;
+		} else if(!mp[0].isNumber()) {
+			b = mp[0].size() == 0 || !mp[0][0].isNumber();
+			if(!b && mp[0][0].number().isOne()) {
+				nested = true;
+				b = true;
+			}
+		}
+		for(size_t i = ir; b && i < mr.size(); i++) {
+			b = mr[i].isUnit() || (mr[i].isPower() && mr[i][0].isUnit() && mr[i][1].isInteger() && mr[i][1].number().integerLength() <= 2);
+		}
+		if(b) {
+			if(ir == 1 && mr.size() == 2 && !nested) {
+				b = mp.size() == 2 && cu_power_equals(mp[1], mr[1]);
+			} else if(ip == 1 || !cu_contains_nonunit(mp, ip)) {
+				MathStructure m(mp);
+				if(ip == 1 && ir == 0) m.delChild(1, true);
+				cu_fix_formatted(m);
+				m.evalSort();
+				b = m.equals(mr, true);
+			} else {
+				b = false;
+			}
+		}
+	}
+	if(b) {
+		Unit *u = NULL;
+		size_t n = 0;
+		bool b = false;
+		bool no_exp = false;
+		if(mr.isMultiplication()) {
+			for(size_t i = 0; i < mr.size(); i++) {
+				Unit *ui = NULL;
+				if(mr[i].isUnit()) ui = mr[i].unit();
+				else if(mr[i].isPower() && mr[i][0].isUnit()) ui = mr[i][0].unit();
+				if(ui) {
+					if(!u) {
+						u = ui;
+						no_exp = mr[i].isUnit();
+					}
+					n++;
+					if(!b && ui->subtype() != SUBTYPE_BASE_UNIT && !ui->isSIUnit()) b = true;
+				}
+			}
+		} else {
+			if(mr.isUnit()) u = mr.unit();
+			else if(mr.isPower()) u = mr[0].unit();
+			if(u) {
+				n = 1;
+				no_exp = mr.isUnit();
+				b = u->subtype() != SUBTYPE_BASE_UNIT && !u->isSIUnit();
+			}
+		}
+		if((n == 1 || !b) && u && u->isCurrency()) {
+			if(eo.local_currency_conversion && CALCULATOR->getLocalCurrency() && u != CALCULATOR->getLocalCurrency()) {
+				ApproximationMode abak = eo.approximation;
+				if(eo.approximation == APPROXIMATION_EXACT) eo.approximation = APPROXIMATION_TRY_EXACT;
+				mr.set(CALCULATOR->convertToOptimalUnit(mr, eo, true));
+				eo.approximation = abak;
+			}
+		} else if(b) {
+			MathStructure mbak(mr);
+			if(eo.auto_post_conversion == POST_CONVERSION_OPTIMAL || eo.auto_post_conversion == POST_CONVERSION_NONE) {
+				if(n == 1 && no_exp && u->referenceName() == "oF") {
+					u = CALCULATOR->getActiveUnit("oC");
+					if(u) mr.set(CALCULATOR->convert(mr, u, eo, true, false, false));
+				} else if(n == 1 && no_exp && u->referenceName() == "oC") {
+					u = CALCULATOR->getActiveUnit("oF");
+					if(u) mr.set(CALCULATOR->convert(mr, u, eo, true, false, false));
+				} else {
+					mr.set(CALCULATOR->convertToOptimalUnit(mr, eo, true));
+				}
+			}
+			if(eo.approximation == APPROXIMATION_EXACT && ((eo.auto_post_conversion != POST_CONVERSION_OPTIMAL && eo.auto_post_conversion != POST_CONVERSION_NONE) || mr.equals(mbak))) {
+				eo.approximation = APPROXIMATION_TRY_EXACT;
+				if(eo.auto_post_conversion == POST_CONVERSION_BASE) mr.set(CALCULATOR->convertToBaseUnits(mr, eo));
+				else mr.set(CALCULATOR->convertToOptimalUnit(mr, eo, true));
+				eo.approximation = APPROXIMATION_EXACT;
+			}
+		} else if(n == 1 && no_exp && u && u->referenceName() == "oC") {
+			u = CALCULATOR->getActiveUnit("oF");
+			if(u) mr.set(CALCULATOR->convert(mr, u, eo, true, false, false));
+		}
+	}
+}
+
 long int count_unit_powers(const MathStructure &m) {
 	if(m.isPower() && m[0].isUnit() && m[1].isInteger()) {
 		long int exp = m[1].number().lintValue();
@@ -416,9 +645,7 @@ void fix_to_struct2(MathStructure &m) {
 		if(m.size() == 1) m.setToChild(1);
 	}
 }
-MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, const EvaluationOptions &eo, bool always_convert, bool convert_to_mixed_units) {
-	return convert(mstruct, to_unit, eo, always_convert, convert_to_mixed_units, false, NULL);
-}
+
 Unit *find_ounce(const MathStructure &m) {
 	if(m.isUnit() && m.unit()->referenceName() == "oz") return m.unit();
 	for(size_t i = 0; i < m.size(); i++) {
@@ -472,7 +699,7 @@ bool contains_angle_ratio(const MathStructure &m) {
 	return num && den;
 }
 
-MathStructure get_units_for_parsed_expression(const MathStructure *parsed_struct, Unit *to_unit, const EvaluationOptions &eo, const MathStructure *mstruct = NULL) {
+MathStructure get_units_for_parsed_expression(const MathStructure *parsed_struct, Unit *to_unit, const EvaluationOptions &eo, const MathStructure *mstruct) {
 	CompositeUnit *cu = NULL;
 	if(to_unit->subtype() == SUBTYPE_COMPOSITE_UNIT) cu = (CompositeUnit*) to_unit;
 	if(cu && cu->countUnits() == 0) return m_zero;
@@ -566,6 +793,18 @@ void test_convert(MathStructure &mstruct_new, Unit *to_unit, long int &n, bool b
 	}
 	eo2.auto_post_conversion = pc;
 }
+bool angle_convert(MathStructure &m, Unit *u, const EvaluationOptions &eo) {
+	if(m.isFunction() && ((m.function()->getArgumentDefinition(1) && m.function()->getArgumentDefinition(1)->type() == ARGUMENT_TYPE_ANGLE) || m.function()->id() == FUNCTION_ID_CIS) && m.size() >= 1) {
+		m[0] = CALCULATOR->convert(m[0], u, eo);
+		return true;
+	}
+	bool b = false;
+	for(size_t i = 0; i < m.size(); i++) {
+		angle_convert(m[i], u, eo);
+		b = true;
+	}
+	return b;
+}
 
 MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, const EvaluationOptions &eo, bool always_convert, bool convert_to_mixed_units, bool transform_orig, MathStructure *parsed_struct) {
 	CompositeUnit *cu = NULL;
@@ -650,6 +889,7 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 				eo2.sync_units = false;
 				eo2.keep_prefixes = true;
 				mstruct_new.eval(eo2);
+				if(b_angle) angle_convert(mstruct_new, to_unit, eo);
 				cleanMessages(mstruct, n_messages + 1);
 			}
 			return mstruct_new;
@@ -832,6 +1072,8 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 				}
 			}
 			b = true;
+		} else if(b_angle && angle_convert(mstruct_new, to_unit, eo)) {
+			return mstruct_new;
 		} else if(to_unit->baseUnit() == getRadUnit() && mstruct_new.contains(to_unit, true) < 1) {
 			mstruct_new.multiply(getRadUnit(), true);
 			if(to_unit->baseExponent() != 1) mstruct_new.last().raise(to_unit->baseExponent());
@@ -1000,7 +1242,10 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 			}
 			eo2.sync_units = false;
 			eo2.keep_prefixes = true;
-			if(b_eval) mstruct_new.eval(eo2);
+			if(b_eval) {
+				mstruct_new.eval(eo2);
+				if(b_angle) angle_convert(mstruct_new, to_unit, eo);
+			}
 
 			cleanMessages(mstruct, n_messages + 1);
 
@@ -1907,6 +2152,18 @@ void set_null_prefixes(MathStructure &m) {
 	}
 }
 
+Unit *get_first_unit(const MathStructure &m) {
+	if(m.isUnit()) return m.unit();
+	if(m.isPower() && m[0].isUnit()) return m[0].unit();
+	if(m.isMultiplication()) {
+		for(size_t i = 0; i < m.size(); i++) {
+			Unit *u = get_first_unit(m[i]);
+			if(u) return u;
+		}
+	}
+	return NULL;
+}
+
 MathStructure Calculator::convert(const MathStructure &mstruct_to_convert, string str2, const EvaluationOptions &eo, MathStructure *to_struct, bool transform_orig, MathStructure *parsed_struct) {
 	if(to_struct) to_struct->setUndefined();
 	remove_blank_ends(str2);
@@ -1956,6 +2213,25 @@ MathStructure Calculator::convert(const MathStructure &mstruct_to_convert, strin
 			else if(v->referenceName() == "electron_mass") u = CALCULATOR->getActiveUnit("electron_unit");
 		}
 		if(u) v = NULL;
+	}
+	if(!u && !v && unitNameIsValid(str2)) {
+		Prefix *p = getPrefix(str2);
+		if(p) {
+			u = get_first_unit(mstruct_to_convert);
+			if(u) {
+				str2 += u->referenceName();
+				u = NULL;
+			} else {
+				mstruct = mstruct_to_convert;
+				mstruct.divide(p->value());
+				mstruct.eval(eo);
+				KnownVariable *v = new KnownVariable("", str2, p->value());
+				mstruct.multiply(v);
+				v->destroy();
+				current_stage = MESSAGE_STAGE_UNSET;
+				return mstruct;
+			}
+		}
 	}
 	if(u) {
 		if(to_struct) to_struct->set(u);

@@ -1,7 +1,7 @@
 /*
     Qalculate
 
-    Copyright (C) 2008  Hanna Knutsson (hanna.knutsson@protonmail.com)
+    Copyright (C) 2008, 2024  Hanna Knutsson (hanna.knutsson@protonmail.com)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -316,7 +316,8 @@ int MathFunction::args(const string &argstr, MathStructure &vargs, const ParseOp
 							if(arg) {
 								// if index has argument definition, use for parsing
 								MathStructure *mstruct = new MathStructure();
-								arg->parse(mstruct, getDefaultValue(itmp), po);
+								if(arg->type() == ARGUMENT_TYPE_TEXT && getDefaultValue(itmp) == "\"\"") arg->parse(mstruct, "", po);
+								else arg->parse(mstruct, getDefaultValue(itmp));
 								if(ignored) mstruct->unref();
 								else vargs.addChild_nocopy(mstruct);
 							} else {
@@ -354,7 +355,8 @@ int MathFunction::args(const string &argstr, MathStructure &vargs, const ParseOp
 						remove_blank_ends(stmp);
 						if(stmp.empty()) {
 							MathStructure *mstruct = new MathStructure();
-							getArgumentDefinition(maxargs())->parse(mstruct, getDefaultValue(itmp));
+							if(getArgumentDefinition(maxargs())->type() == ARGUMENT_TYPE_TEXT && getDefaultValue(itmp) == "\"\"") getArgumentDefinition(maxargs())->parse(mstruct, "");
+							else getArgumentDefinition(maxargs())->parse(mstruct, getDefaultValue(itmp));
 							vargs[vargs.size() - 1].addChild_nocopy(mstruct);
 						} else {
 							MathStructure *mstruct = new MathStructure();
@@ -387,7 +389,8 @@ int MathFunction::args(const string &argstr, MathStructure &vargs, const ParseOp
 			if(stmp.empty()) {
 				if(arg) {
 					MathStructure *mstruct = new MathStructure();
-					arg->parse(mstruct, getDefaultValue(itmp));
+					if(arg->type() == ARGUMENT_TYPE_TEXT && getDefaultValue(itmp) == "\"\"") arg->parse(mstruct, "");
+					else arg->parse(mstruct, getDefaultValue(itmp));
 					if(ignored) mstruct->unref();
 					else vargs.addChild_nocopy(mstruct);
 				} else {
@@ -424,7 +427,8 @@ int MathFunction::args(const string &argstr, MathStructure &vargs, const ParseOp
 			remove_blank_ends(stmp);
 			if(stmp.empty()) {
 				MathStructure *mstruct = new MathStructure();
-				getArgumentDefinition(maxargs())->parse(mstruct, getDefaultValue(itmp));
+				if(getArgumentDefinition(maxargs())->type() == ARGUMENT_TYPE_TEXT && getDefaultValue(itmp) == "\"\"") getArgumentDefinition(maxargs())->parse(mstruct, "");
+				else getArgumentDefinition(maxargs())->parse(mstruct, getDefaultValue(itmp));
 				vargs[vargs.size() - 1].addChild_nocopy(mstruct);
 			} else {
 				MathStructure *mstruct = new MathStructure();
@@ -449,7 +453,8 @@ int MathFunction::args(const string &argstr, MathStructure &vargs, const ParseOp
 		while((size_t) itmp2 - minargs() < default_values.size() && (maxargs() > 0 || !default_values[itmp2 - minargs()].empty())) {
 			arg = getArgumentDefinition(itmp2 + 1);
 			MathStructure *mstruct = new MathStructure();
-			if(arg) arg->parse(mstruct, default_values[itmp2 - minargs()]);
+			if(arg && arg->type() == ARGUMENT_TYPE_TEXT && default_values[itmp2 - minargs()] == "\"\"") arg->parse(mstruct, "");
+			else if(arg) arg->parse(mstruct, default_values[itmp2 - minargs()]);
 			else CALCULATOR->parse(mstruct, default_values[itmp2 - minargs()]);
 			vargs.addChild_nocopy(mstruct);
 			itmp2++;
@@ -1546,7 +1551,7 @@ bool Argument::test(MathStructure &value, int index, MathFunction *f, const Eval
 		if(value.isVector()) return false;
 	}
 	if(!b) {
-		if(b_error && (type() != ARGUMENT_TYPE_SYMBOLIC || !value.isUndefined())) {
+		if((b_error || (index == 2 && f->id() == FUNCTION_ID_ROOT && value.isNumber())) && (type() != ARGUMENT_TYPE_SYMBOLIC || !value.isUndefined())) {
 			if(sname.empty()) {
 				CALCULATOR->error(true, _("Argument %s in %s() must be %s."), i2s(index).c_str(), f->name().c_str(), printlong().c_str(), NULL);
 			} else {
@@ -1562,8 +1567,25 @@ MathStructure Argument::parse(const string &str, const ParseOptions &po) const {
 	parse(&mstruct, str, po);
 	return mstruct;
 }
+
+void fix_date_time_string(MathStructure *mstruct) {
+	if(mstruct->isDateTime() && !mstruct->datetime()->parsed_string.empty()) mstruct->set(mstruct->datetime()->parsed_string, false, true);
+}
+void vector_fix_date_time_string(MathStructure *mstruct) {
+	fix_date_time_string(mstruct);
+	if(mstruct->isVector()) {
+		for(size_t i = 0; i < mstruct->size(); i++) {
+			vector_fix_date_time_string(mstruct->getChild(i + 1));
+		}
+	}
+}
+
 void Argument::parse(MathStructure *mstruct, const string &str, const ParseOptions &po) const {
 	if(b_text) {
+		if(str.empty()) {
+			mstruct->set("", false, true);
+			return;
+		}
 		MathFunction *f_cat = CALCULATOR->getFunctionById(FUNCTION_ID_CONCATENATE);
 		for(size_t i = 1; i <= f_cat->countNames(); i++) {
 			if(str.find(f_cat->getName(i).name) != string::npos) {
@@ -1599,14 +1621,37 @@ void Argument::parse(MathStructure *mstruct, const string &str, const ParseOptio
 		}
 		size_t cits = 0;
 		if(str.length() >= 2 + pars * 2) {
-			if(str[pars] == ID_WRAP_LEFT_CH && str[str.length() - 1 - pars] == ID_WRAP_RIGHT_CH && str.find(ID_WRAP_RIGHT, pars + 1) == str.length() - 1 - pars) {
-				CALCULATOR->parse(mstruct, str.substr(pars, str.length() - pars * 2), po);
-				if(mstruct->isDateTime() && !mstruct->datetime()->parsed_string.empty()) mstruct->set(mstruct->datetime()->parsed_string, false, true);
+			if(str[pars] == ID_WRAP_LEFT_CH && str[str.length() - 1 - pars] == ID_WRAP_RIGHT_CH && str.find(ID_WRAP_RIGHT, pars + 1) == str.length() - 1 - pars && str.find_first_not_of(NUMBERS, pars + 1) == str.length() - 1 - pars) {
+				MathStructure *m_temp = CALCULATOR->getId((size_t) s2i(str.substr(pars + 1, str.length() - pars * 2 - 2)));
+				if(m_temp) {
+					fix_date_time_string(m_temp);
+					if(m_temp->isUnit() && m_temp->unit()->referenceName() == "in") m_temp->set("\"", false, true);
+					else if(m_temp->isUnit() && m_temp->unit()->referenceName() == "ft") m_temp->set("\'", false, true);
+					else if(m_temp->isVariable() && m_temp->variable() == CALCULATOR->getVariableById(VARIABLE_ID_PERCENT)) m_temp->set("%", false, true);
+				}
+				if(m_temp && m_temp->isSymbolic()) {
+					mstruct->set(*m_temp);
+					m_temp->unref();
+				} else {
+					string str3;
+					if(!m_temp) {
+						CALCULATOR->error(true, _("Internal id %s does not exist."), str.substr(pars + 1, str.length() - pars * 2 - 2).c_str(), NULL);
+						mstruct->set(CALCULATOR->getVariableById(VARIABLE_ID_UNDEFINED)->preferredInputName(true, false, false, true).name, false, true);
+					} else {
+						mstruct->set(m_temp->print(CALCULATOR->save_printoptions), false, true);
+						m_temp->unref();
+					}
+				}
 				return;
 			}
 			if(str[pars] == '\\' && str[str.length() - 1 - pars] == '\\') {
 				CALCULATOR->parse(mstruct, str.substr(1 + pars, str.length() - 2 - pars * 2), po);
-				if(mstruct->isDateTime() && !mstruct->datetime()->parsed_string.empty()) mstruct->set(mstruct->datetime()->parsed_string, false, true);
+				fix_date_time_string(mstruct);
+				return;
+			}
+			if(b_handle_vector && str[pars] == LEFT_VECTOR_WRAP_CH && str[str.length() - 1 - pars] == RIGHT_VECTOR_WRAP_CH && (str.find_first_of("\"\'", pars + 1) != string::npos || (str.find(LEFT_PARENTHESIS ID_WRAP_LEFT) != string::npos && str.find(ID_WRAP_RIGHT RIGHT_PARENTHESIS) != string::npos))) {
+				CALCULATOR->parse(mstruct, str.substr(1 + pars, str.length() - 2 - pars * 2), po);
+				vector_fix_date_time_string(mstruct);
 				return;
 			}
 			if((str[pars] == '\"' && str[str.length() - 1 - pars] == '\"') || (str[pars] == '\'' && str[str.length() - 1 - pars] == '\'')) {
@@ -1619,40 +1664,77 @@ void Argument::parse(MathStructure *mstruct, const string &str, const ParseOptio
 					cits++;
 					i++;
 				}
+				if((cits / 2) % 2 != 0) {
+					mstruct->set(str, false, true);
+					return;
+				}
 			}
 		}
+		if(pars == 0 && cits == 0 && str.find(ID_WRAP_LEFT) == string::npos) {
+			mstruct->set(str, false, true);
+			return;
+		}
 		string str2;
-		if(pars == 0 || (cits / 2) % 2 != 0) str2 = str;
-		else str2 = str.substr(pars + (cits ? 1 : 0), str.length() - pars * 2 - (cits ? 2 : 0));
+		if(pars == 0) {
+			str2 = str;
+		} else {
+			str2 = str.substr(pars + (cits ? 1 : 0), str.length() - pars * 2 - (cits ? 2 : 0));
+			remove_blank_ends(str2);
+		}
 		if(cits == 0) replace_internal_operators(str2);
-		if((cits / 2) % 2 == 0) {
-			size_t i = str2.find(ID_WRAP_LEFT);
-			if(i != string::npos && i < str2.length() - 2) {
-				i = 0;
-				size_t i2 = 0; int id = 0;
-				while((i = str2.find(ID_WRAP_LEFT, i)) != string::npos) {
-					i2 = str2.find(ID_WRAP_RIGHT, i + 1);
-					if(i2 == string::npos) break;
+		size_t i = str2.find(ID_WRAP_LEFT);
+		if(i != string::npos && i < str2.length() - 2) {
+			i = 0;
+			size_t i2 = 0; int id = 0;
+			while((i = str2.find(ID_WRAP_LEFT, i)) != string::npos) {
+				i2 = str2.find_first_not_of(NUMBERS, i + 1);
+				if(i2 == string::npos) break;
+				if(i2 > i + 1 && str2[i2] == ID_WRAP_RIGHT_CH) {
 					id = s2i(str2.substr(i + 1, i2 - (i + 1)));
 					MathStructure *m_temp = CALCULATOR->getId((size_t) id);
 					bool do_par = (i == 0 || i2 + 1 == str2.length() || str2[i - 1] != LEFT_PARENTHESIS_CH || str2[i2 + 1] != RIGHT_PARENTHESIS_CH);
-					string str3;
-					if(do_par) str3 = LEFT_PARENTHESIS_CH;
-					if(!m_temp) {
-						CALCULATOR->error(true, _("Internal id %s does not exist."), i2s(id).c_str(), NULL);
-						str3 += CALCULATOR->getVariableById(VARIABLE_ID_UNDEFINED)->preferredInputName(true, false, false, true).name;
-					} else {
-						str3 += m_temp->print(CALCULATOR->save_printoptions).c_str();
-						m_temp->unref();
+					if(m_temp) {
+						fix_date_time_string(m_temp);
+						if(m_temp->isUnit() && m_temp->unit()->referenceName() == "in") m_temp->set("\"", false, true);
+						else if(m_temp->isUnit() && m_temp->unit()->referenceName() == "ft") m_temp->set("\'", false, true);
+						else if(m_temp->isVariable() && m_temp->variable() == CALCULATOR->getVariableById(VARIABLE_ID_PERCENT)) m_temp->set("%", false, true);
 					}
-					if(do_par) str3 += RIGHT_PARENTHESIS_CH;
-					str2.replace(i, i2 - i + 1, str3);
-					i += str3.length();
+					if(m_temp && m_temp->isSymbolic()) {
+						if(!do_par) {
+							i--;
+							i2++;
+						}
+						str2.replace(i, i2 - i + 1, m_temp->symbol());
+						i += m_temp->symbol().length();
+						m_temp->unref();
+					} else {
+						string str3;
+						if(do_par) str3 = LEFT_PARENTHESIS_CH;
+						if(!m_temp) {
+							CALCULATOR->error(true, _("Internal id %s does not exist."), i2s(id).c_str(), NULL);
+							str3 += CALCULATOR->getVariableById(VARIABLE_ID_UNDEFINED)->preferredInputName(true, false, false, true).name;
+						} else {
+							str3 += m_temp->print(CALCULATOR->save_printoptions);
+							m_temp->unref();
+						}
+						if(do_par) str3 += RIGHT_PARENTHESIS_CH;
+						str2.replace(i, i2 - i + 1, str3);
+						i += str3.length();
+					}
+				} else {
+					i = i2;
 				}
 			}
 		}
 		mstruct->set(str2, false, true);
 	} else {
+		size_t i = string::npos;
+		if((b_handle_vector && type() == ARGUMENT_TYPE_INTEGER) || type() == ARGUMENT_TYPE_VECTOR || (type() == ARGUMENT_TYPE_SET && ((ArgumentSet*) this)->countArguments() == 2 && ((ArgumentSet*) this)->getArgument(1)->type() == ARGUMENT_TYPE_INTEGER && ((ArgumentSet*) this)->getArgument(2)->type() == ARGUMENT_TYPE_VECTOR)) i = str.find(":", 1);
+		if(i != string::npos && i < str.length() - 1 && str.find_first_not_of(NUMBERS ":", str[0] == MINUS_CH ? 1 : 0) == string::npos) {
+			string str2 = "["; str2 += str; str2 += "]";
+			CALCULATOR->parse(mstruct, str2, po);
+			return;
+		}
 		CALCULATOR->parse(mstruct, str, po);
 	}
 }
@@ -2101,7 +2183,10 @@ Argument *SymbolicArgument::copy() const {return new SymbolicArgument(this);}
 string SymbolicArgument::print() const {return _("symbol");}
 string SymbolicArgument::subprintlong() const {return _("an unknown variable/symbol");}
 
-TextArgument::TextArgument(string name_, bool does_test, bool does_error) : Argument(name_, does_test, does_error) {b_text = true;}
+TextArgument::TextArgument(string name_, bool does_test, bool does_error) : Argument(name_, does_test, does_error) {
+	b_text = true;
+	b_handle_vector = does_test;
+}
 TextArgument::TextArgument(const TextArgument *arg) {set(arg); b_text = true;}
 TextArgument::~TextArgument() {}
 bool TextArgument::subtest(MathStructure &value, const EvaluationOptions &eo) const {
@@ -2116,7 +2201,9 @@ string TextArgument::print() const {return _("text");}
 string TextArgument::subprintlong() const {return _("a text string");}
 bool TextArgument::suggestsQuotes() const {return b_text;}
 
-DateArgument::DateArgument(string name_, bool does_test, bool does_error) : Argument(name_, does_test, does_error) {}
+DateArgument::DateArgument(string name_, bool does_test, bool does_error) : Argument(name_, does_test, does_error) {
+	b_handle_vector = does_test;
+}
 DateArgument::DateArgument(const DateArgument *arg) {set(arg);}
 DateArgument::~DateArgument() {}
 void DateArgument::parse(MathStructure *mstruct, const string &str, const ParseOptions &po) const {
@@ -2177,7 +2264,7 @@ bool VectorArgument::subtest(MathStructure &value, const EvaluationOptions &eo) 
 		else return false;
 	}
 	if(value.isMatrix() && value.columns() == 1 && value.rows() > 1) {
-		value.transposeMatrix();
+		if(!value.transposeMatrix()) return false;
 	}
 	if(b_argloop && subargs.size() > 0) {
 		for(size_t i = 0; i < value.countChildren(); i++) {
@@ -2348,7 +2435,9 @@ Argument *FileArgument::copy() const {return new FileArgument(this);}
 string FileArgument::print() const {return _("file");}
 string FileArgument::subprintlong() const {return _("a valid file name");}
 
-BooleanArgument::BooleanArgument(string name_, bool does_test, bool does_error) : Argument(name_, does_test, does_error) {}
+BooleanArgument::BooleanArgument(string name_, bool does_test, bool does_error) : Argument(name_, does_test, does_error) {
+	b_handle_vector = does_test;
+}
 BooleanArgument::BooleanArgument(const BooleanArgument *arg) {set(arg);}
 BooleanArgument::~BooleanArgument() {}
 bool BooleanArgument::subtest(MathStructure &value, const EvaluationOptions &eo) const {

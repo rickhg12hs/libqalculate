@@ -1,7 +1,7 @@
 /*
     Qalculate (library)
 
-    Copyright (C) 2003-2007, 2008, 2016, 2018  Hanna Knutsson (hanna.knutsson@protonmail.com)
+    Copyright (C) 2003-2007, 2008, 2016, 2018, 2024  Hanna Knutsson (hanna.knutsson@protonmail.com)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -897,7 +897,12 @@ RoundFunction::RoundFunction() : MathFunction("round", 1, 3) {
 	setArgumentDefinition(1, arg);
 	setArgumentDefinition(2, new IntegerArgument());
 	setDefaultValue(2, "0");
-	setArgumentDefinition(3, new BooleanArgument());
+	IntegerArgument *iarg = new IntegerArgument();
+	Number nr(ROUNDING_HALF_AWAY_FROM_ZERO, 1, 0);
+	iarg->setMin(&nr);
+	nr.set(ROUNDING_DOWN, 1, 0);
+	iarg->setMax(&nr);
+	setArgumentDefinition(3, iarg);
 	setDefaultValue(3, "0");
 }
 int RoundFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
@@ -905,7 +910,7 @@ int RoundFunction::calculate(MathStructure &mstruct, const MathStructure &vargs,
 	if(vargs[0].isNumber()) {
 		Number nr(vargs[0].number());
 		if(vargs.size() >= 2 && !vargs[1].isZero()) nr.exp10(vargs[1].number());
-		if(nr.round(vargs.size() >= 3 ? vargs[2].number().getBoolean() : true) && (eo.approximation != APPROXIMATION_EXACT || !nr.isApproximate() || vargs[0].isApproximate())) {
+		if(nr.round(vargs.size() >= 3 ? (RoundingMode) vargs[2].number().intValue() : ROUNDING_HALF_TO_EVEN) && (eo.approximation != APPROXIMATION_EXACT || !nr.isApproximate() || vargs[0].isApproximate())) {
 			if(vargs.size() >= 2 && !vargs[1].isZero()) nr.exp10(-vargs[1].number());
 			mstruct.set(nr);
 			return 1;
@@ -918,7 +923,7 @@ int RoundFunction::calculate(MathStructure &mstruct, const MathStructure &vargs,
 	if(mstruct.isNumber()) {
 		Number nr(mstruct.number());
 		if(vargs.size() >= 2 && !vargs[1].isZero()) nr.exp10(vargs[1].number());
-		if(nr.round(vargs.size() >= 3 ? vargs[2].number().getBoolean() : true) && (eo.approximation != APPROXIMATION_EXACT || !nr.isApproximate() || vargs[0].isApproximate())) {
+		if(nr.round(vargs.size() >= 3 ? (RoundingMode) vargs[2].number().intValue() : ROUNDING_HALF_TO_EVEN) && (eo.approximation != APPROXIMATION_EXACT || !nr.isApproximate() || vargs[0].isApproximate())) {
 			if(vargs.size() >= 2 && !vargs[1].isZero()) nr.exp10(-vargs[1].number());
 			mstruct.set(nr);
 			return 1;
@@ -931,29 +936,29 @@ int RoundFunction::calculate(MathStructure &mstruct, const MathStructure &vargs,
 		if(mstruct2.isNumber()) {
 			Number nr(mstruct2.number());
 			if(vargs.size() >= 2 && !vargs[1].isZero()) nr.exp10(vargs[1].number());
-			if(nr.round(vargs.size() >= 3 ? vargs[2].number().getBoolean() : true) && !nr.isApproximate()) {
+			if(nr.round(vargs.size() >= 3 ? (RoundingMode) vargs[2].number().intValue() : ROUNDING_HALF_TO_EVEN) && !nr.isApproximate()) {
 				if(vargs.size() >= 2 && !vargs[1].isZero()) nr.exp10(-vargs[1].number());
 				mstruct.set(nr);
 				return 1;
 			}
 		}
 	}
-	if(mstruct.representsInteger(false)) return 1;
+	if(mstruct.representsInteger(false) && (vargs.size() < 2 || vargs[1].number().isNonNegative())) return 1;
 	return -1;
 }
 bool RoundFunction::representsPositive(const MathStructure&, bool) const {return false;}
 bool RoundFunction::representsNegative(const MathStructure&, bool) const {return false;}
-bool RoundFunction::representsNonNegative(const MathStructure &vargs, bool) const {return vargs.size() == 1 && vargs[0].representsReal() && vargs[0].representsNonNegative();}
-bool RoundFunction::representsNonPositive(const MathStructure &vargs, bool) const {return vargs.size() == 1 && vargs[0].representsReal() && vargs[0].representsNonPositive();}
-bool RoundFunction::representsInteger(const MathStructure &vargs, bool) const {return vargs.size() == 1 && vargs[0].representsReal() && (vargs.size() < 2 || vargs[1].representsNonPositive());}
-bool RoundFunction::representsNumber(const MathStructure &vargs, bool) const {return vargs.size() == 1 && vargs[0].representsReal();}
-bool RoundFunction::representsRational(const MathStructure &vargs, bool) const {return vargs.size() == 1 && vargs[0].representsReal();}
-bool RoundFunction::representsReal(const MathStructure &vargs, bool) const {return vargs.size() == 1 && vargs[0].representsReal();}
+bool RoundFunction::representsNonNegative(const MathStructure &vargs, bool) const {return vargs.size() >= 1 && vargs[0].representsReal() && vargs[0].representsNonNegative();}
+bool RoundFunction::representsNonPositive(const MathStructure &vargs, bool) const {return vargs.size() >= 1 && vargs[0].representsReal() && vargs[0].representsNonPositive();}
+bool RoundFunction::representsInteger(const MathStructure &vargs, bool) const {return vargs.size() >= 1 && vargs[0].representsReal() && (vargs.size() < 2 || vargs[1].representsNonPositive());}
+bool RoundFunction::representsNumber(const MathStructure &vargs, bool) const {return vargs.size() >= 1 && vargs[0].representsReal();}
+bool RoundFunction::representsRational(const MathStructure &vargs, bool) const {return vargs.size() >= 1 && vargs[0].representsReal();}
+bool RoundFunction::representsReal(const MathStructure &vargs, bool) const {return vargs.size() >= 1 && vargs[0].representsReal();}
 bool RoundFunction::representsNonComplex(const MathStructure &vargs, bool) const {return true;}
 bool RoundFunction::representsComplex(const MathStructure&, bool) const {return false;}
 bool RoundFunction::representsNonZero(const MathStructure&, bool) const {return false;}
-bool RoundFunction::representsEven(const MathStructure &vargs, bool) const {return vargs.size() == 1 && vargs[0].representsEven() && (vargs.size() < 2 || vargs[1].representsNonPositive());}
-bool RoundFunction::representsOdd(const MathStructure &vargs, bool) const {return vargs.size() == 1 && vargs[0].representsOdd() && (vargs.size() < 2 || vargs[1].representsNonPositive());}
+bool RoundFunction::representsEven(const MathStructure &vargs, bool) const {return vargs.size() >= 1 && vargs[0].representsEven() && (vargs.size() < 2 || vargs[1].representsNonPositive());}
+bool RoundFunction::representsOdd(const MathStructure &vargs, bool) const {return vargs.size() >= 1 && vargs[0].representsOdd() && (vargs.size() < 2 || vargs[1].representsNonPositive());}
 bool RoundFunction::representsUndefined(const MathStructure&) const {return false;}
 
 FracFunction::FracFunction() : MathFunction("frac", 1) {
@@ -2509,5 +2514,128 @@ GetUncertaintyFunction::GetUncertaintyFunction() : MathFunction("errorPart", 1, 
 int GetUncertaintyFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions&) {
 	if(vargs[1].number().getBoolean()) mstruct = vargs[0].number().relativeUncertainty();
 	else mstruct = vargs[0].number().uncertainty();
+	return 1;
+}
+
+
+IntegerDigitsFunction::IntegerDigitsFunction() : MathFunction("integerDigits", 1, 3) {
+	setArgumentDefinition(1, new IntegerArgument());
+	IntegerArgument *iarg = new IntegerArgument();
+	iarg->setMin(&nr_two);
+	setArgumentDefinition(2, iarg);
+	setDefaultValue(2, "10");
+	iarg = new IntegerArgument("", ARGUMENT_MIN_MAX_NONE, true, true, INTEGER_TYPE_SLONG);
+	iarg->setMin(&nr_minus_one);
+	setArgumentDefinition(3, iarg);
+	setDefaultValue(3, "-1");
+}
+int IntegerDigitsFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
+	Number nr_rem;
+	Number nr(vargs[0].number());
+	nr.abs();
+	size_t l = 0;
+	if(vargs[2].number().isPositive()) {
+		l = vargs[2].number().ulintValue();
+	} else if(!nr.isZero()) {
+		Number nr_log(nr);
+		nr_log.log(vargs[1].number());
+		nr_log.ceil();
+		l = nr_log.ulintValue();
+	}
+	mstruct.clearVector();
+	mstruct.resizeVector(l, m_zero);
+	while(l > 0 && !nr.isZero()) {
+		if(CALCULATOR->aborted() || !nr.iquo(vargs[1].number(), nr_rem)) return 0;
+		mstruct[l - 1] = nr_rem;
+		l--;
+	}
+	return 1;
+}
+
+bool contains_unrecalculable_interval(const MathStructure &m) {
+	if(m.isNumber() && (m.number().isInterval() || m.isApproximate())) return true;
+	if(m.isFunction() && (m.function()->id() == FUNCTION_ID_UNCERTAINTY || m.function()->id() == FUNCTION_ID_INTERVAL)) return true;
+	if(m.isVariable() && m.variable()->isKnown()) {
+		if(m.variable()->id() == VARIABLE_ID_E || m.variable()->id() == VARIABLE_ID_PI || m.variable()->id() == VARIABLE_ID_CATALAN || m.variable()->id() == VARIABLE_ID_EULER) return false;
+		return contains_unrecalculable_interval(((KnownVariable*) m.variable())->get());
+	}
+	for(size_t i = 0; i < m.size(); i++) {
+		if(contains_unrecalculable_interval(m[i])) return true;
+	}
+	return false;
+}
+
+DigitGetFunction::DigitGetFunction() : MathFunction("digitGet", 2, 3) {
+	NumberArgument *narg = new NumberArgument("", ARGUMENT_MIN_MAX_NONE, false, false);
+	narg->setComplexAllowed(false);
+	narg->setHandleVector(true);
+	setArgumentDefinition(1, narg);
+	setArgumentDefinition(2, new IntegerArgument("", ARGUMENT_MIN_MAX_NONE));
+	IntegerArgument *iarg = new IntegerArgument();
+	iarg->setMin(&nr_two);
+	setArgumentDefinition(3, iarg);
+	setDefaultValue(3, "10");
+}
+int DigitGetFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
+	int precbak = PRECISION;
+	bool recalculable = false;
+	while(true) {
+		CALCULATOR->beginTemporaryStopMessages();
+		mstruct = vargs[0];
+		mstruct.eval(eo);
+		if(!mstruct.isNumber()) break;
+		Number nr(mstruct.number());
+		Number nr_exp(vargs[2].number());
+		if(!nr_exp.raise(vargs[1].number()) || !nr.divide(nr_exp) || !nr.trunc() || !nr.rem(vargs[2].number())) break;
+		if(nr.isInteger()) {
+			CALCULATOR->endTemporaryStopMessages(true);
+			if(precbak != PRECISION) CALCULATOR->setPrecision(precbak);
+			mstruct = nr;
+			return 1;
+		} else {
+			if(!recalculable) recalculable = !contains_unrecalculable_interval(vargs[0]);
+			if(recalculable && !CALCULATOR->aborted() && PRECISION < 2000) {
+				CALCULATOR->endTemporaryStopMessages(false);
+				CALCULATOR->setPrecision(PRECISION * 5);
+			} else {
+				CALCULATOR->error(true, _("Insufficient precision."), NULL);
+				break;
+			}
+		}
+	}
+	CALCULATOR->endTemporaryStopMessages(true);
+	if(precbak != PRECISION) CALCULATOR->setPrecision(precbak);
+	return -1;
+}
+
+DigitSetFunction::DigitSetFunction() : MathFunction("digitSet", 3, 4) {
+	NumberArgument *narg = new NumberArgument();
+	narg->setComplexAllowed(false);
+	narg->setHandleVector(true);
+	setArgumentDefinition(1, narg);
+	setArgumentDefinition(2, new IntegerArgument("", ARGUMENT_MIN_MAX_NONE));
+	setArgumentDefinition(3, new IntegerArgument("", ARGUMENT_MIN_MAX_NONNEGATIVE));
+	IntegerArgument *iarg = new IntegerArgument();
+	iarg->setMin(&nr_two);
+	setArgumentDefinition(4, iarg);
+	setDefaultValue(4, "10");
+}
+int DigitSetFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
+	Number nr(vargs[0].number());
+	Number nr_low(nr);
+	Number nr_exp(vargs[3].number());
+	Number nr_value(vargs[2].number());
+	if(!nr_exp.raise(vargs[1].number()) || !nr.divide(nr_exp) || !nr.trunc()) return 0;
+	if(!nr.isInteger()) {
+		CALCULATOR->error(true, _("Insufficient precision."), NULL);
+		return 0;
+	}
+	if(!nr_low.rem(nr_exp) || !nr.iquo(vargs[3].number()) || !nr_value.multiply(nr_exp) || !nr_exp.multiply(vargs[3].number()) || !nr.multiply(nr_exp) || !nr.add(nr_low)) return 0;
+	if(nr.isNegative()) {
+		if(!nr.subtract(nr_value)) return 0;
+	} else {
+		if(!nr.add(nr_value)) return 0;
+	}
+	mstruct = nr;
 	return 1;
 }

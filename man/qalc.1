@@ -39,7 +39,7 @@ execute commands from a file first
 .PP
 .TP 8
 .B \-h, \-\-help
-display this help and exits
+display a list of command line options and exit
 .PP
 .TP 8
 .B \-i, \-\-interactive
@@ -47,23 +47,23 @@ start in interactive mode
 .PP
 .TP 8
 .B \-l, \-\-list \fI[search term]\fP
-displays a list of all user-defined or matching variables, functions, units, and prefixes.
+display a list of all user-defined or matching variables, functions, units, and prefixes, and exit
 .PP
 .TP 8
 .B \-\-list\-functions \fI[search term]\fP
-displays a list of all or matching functions.
+display a list of all or matching functions and exit
 .PP
 .TP 8
 .B \-\-list\-prefixes \fI[search term]\fP
-displays a list of all or matching prefixes.
+display a list of all or matching prefixes and exit
 .PP
 .TP 8
 .B \-\-list\-units \fI[search term]\fP
-displays a list of all or matching units.
+display a list of all or matching units and exit
 .PP
 .TP 8
 .B \-\-list\-variables \fI[search term]\fP
-displays a list of all or matching variables.
+display a list of all or matching variables and exit
 .PP
 .TP 8
 .B \-m, \-\-time \fImilliseconds\fP
@@ -133,11 +133,11 @@ Sets the result number base (equivalent to set base).
 .PP
 .TP 8
 .B clear
-Clears the screen
+Clears the screen.
 .PP
 .TP 8
 .B clear history
-Clears the expression history
+Clears the expression history.
 .PP
 .TP 8
 .B delete \fIname\fP
@@ -174,7 +174,7 @@ Example: find variables planck.
 .PP
 .TP 8
 .B function \fIname expression\fP
-Creates a function with the specified name and expression. Use '\\x', '\\y', '\\z', '\\a', etc. for arguments in the expression.
+Creates a function with the specified name and expression. Use '\\x', '\\y', '\\z', '\\a', etc. for arguments in the expression. The function is persistent unless the command is invoked from file or in result only mode.
 .br
 Example: function func1 5*\\x.
 .PP
@@ -182,10 +182,20 @@ Example: function func1 5*\\x.
 .B help \fI[command]\fP
 .PP
 .TP 8
-.B info
+.B history
+Lists the expression history.
+.PP
+.TP 8
+.B info \fIname\fP
 Displays information about a function, variable, unit, or prefix.
 .br
 Example: info sin.
+.PP
+.TP 8
+.B keep/unkeep \fIname\fP
+Make the temporary user-defined variable or function with the specified name non-temporary.
+.br
+Example: keep var1.
 .PP
 .TP 8
 .B MC/MS/M+/M-
@@ -224,7 +234,7 @@ Example: to bin
 .PP
 .TP 8
 .B variable \fIname expression\fP
-Create a variable with the specified name and expression.
+Create a variable with the specified name and expression. The variable is persistent unless the command is invoked from file or in result only mode.
 .br
 Example: variable var1 pi / 2.
 .PP
@@ -251,7 +261,7 @@ Clears the entire RPN stack.
 Duplicates a value on the RPN stack to the top of the stack. If no index is specified, the top of the stack is duplicated. Index 1 is the top of stack and negative index values count from the bottom of the stack.
 .PP
 .TP 8
-.B move \fIindex 1 index 2\fP
+.B move \fIindex 1 [index 2]\fP
 Changes the position of a value on the RPN stack. Index 1 is the top of stack and negative index values count from the bottom of the stack.
 .br
 Example: move 2 4
@@ -320,7 +330,7 @@ Default assumptions for unknown variables.
 Calculation:
 .PP
 .TP 8
-.B angle unit, angle \fI(0 = none, 1* = radians, 2 = degrees, 3 = gradians)\fP
+.B angle unit, angle \fI(0 = none, 1* = radians, 2 = degrees, 3 = gradians, 4 = custom)\fP
 Default angle unit for trigonometric functions.
 .PP
 .TP 8
@@ -388,7 +398,7 @@ Use colors to highlight different elements of expressions and results.
 .B excessive parentheses, expar \fI(on, off*)\fP
 .PP
 .TP 8
-.B minus last, minlast \fI(on, off*)\fP
+.B minus last, minlast \fI(on*, off)\fP
 Always place negative values last.
 .PP
 .TP 8
@@ -409,6 +419,10 @@ Add extra space around operators.
 Display Unicode characters.
 .PP
 .TP 8
+.B unicode exponents, uniexp \fI(0 = off, 1* = on, 2 = units)\fP
+Display exponents 0-9 using Unicode superscript characters.
+.PP
+.TP 8
 .B vertical space, vspace \fI(on*, off)\fP
 Add empty lines before and after result.
 .PP
@@ -421,6 +435,9 @@ Numerical display:
 .B base display, basedisp \fI(0 = none, 1* = normal, 2 = alternative)\fP
 .PP
 .TP 8
+.B binary bits, bits \fI(0* = auto, >= 2)\fP
+.PP
+.TP 8
 .B complex form, cplxform \fI(0* = rectangular, 1 = exponential, 2 = polar, 3 = cis, 4 = angle)\fP
 .PP
 .TP 8
@@ -431,7 +448,15 @@ Determines the default decimal separator.
 .B digit grouping, group \fI(0* = off, 1 = standard, 2 = locale)\fP
 .PP
 .TP 8
-.B fractions, fr \fI(-1* = auto, 0 = off, 1 = exact, 2 = on, 3 = mixed, 4 = long, 5 = dual)\fP
+.B digits \fI(-1* = auto, >= 2)\fP
+Specifies the number of displayed significant digits (by default determined by precision).
+.PP
+.TP 8
+.B exp display, edisp \fI(E*, e, 10)\fP
+Determines how scientific notation are displayed (e.g. 3E6, 3e6, or 3 * 10^6).
+.PP
+.TP 8
+.B fractions, fr \fI(-1* = auto, 0 = off, 1 = exact, 2 = on, 3 = mixed, 4 = long, 5 = dual, 1/n)\fP
 Determines how rational numbers are displayed (e.g. 5/4 = 1 + 1/4 = 1.25). 'long' removes limits on the size of the numerator and denonimator.
 .PP
 .TP 8
@@ -446,27 +471,26 @@ Use 'j' (instead of 'i') as default symbol for the imaginary unit.
 .B interval display, ivdisp \fI(0* = adaptive, 1 = significant, 2 = interval, 3 = plusminus, 4 = midpoint, 5 = lower, 6 = upper, 7 = concise, 8 = relative)\fP
 .PP
 .TP 8
-.B lowercase e, lowe \fI(on, off*)\fP
-Use lowercase e for E-notation (5e2 = 5 * 10^2).
-.PP
-.TP 8
 .B lowercase numbers, lownum \fI(on, off*)\fP
 Use lowercase letters for number bases > 10.
 .PP
 .TP 8
-.B max decimals, maxdeci \fI(-1 = off*, >= 0)\fP
+.B max decimals, maxdeci \fI(-1* = off, >= 0)\fP
 .PP
 .TP 8
-.B min decimals, mindeci \fI(-1 = off*, >= 0)\fP
+.B min decimals, mindeci \fI(-1* = off, >= 0)\fP
 .PP
 .TP 8
-.B rounding \fI(0 = standard*, 1 = even, 2 = truncate)\fP
-Determines whether how approximate numbers are rounded (round halfway numbers away from zero or towards the nearest even digit, or round all numbers
-towards zero).
+.B repeating decimals, repdeci \fI(on, off*)\fP
+If activated, 1/6 is displayed as '0.1 666...', otherwise as '0.166667'.
 .PP
 .TP 8
-.B scientific notation, exp \fI(0 = off, -1 = auto*, -3 = engineering, 1 = pure, 3 = scientific, >= 0)\fP
-Determines how scientific notation is used (e.g. 5 543 000 = 5.543E6).
+.B rounding \fI(0* = half away from zero, 1 = half to even, 2 = toward zero, 3 = half to odd, 4 = half toward zero, 5 = half up, 6 = half down, 7 = half random, 8 = away from zero, 9 = up, 10 = down)\fP
+Determines how approximate numbers are rounded.
+.PP
+.TP 8
+.B scientific notation, exp \fI(0 = off, -1* = auto, -3 = engineering, 1 = pure, 3 = scientific, >= 0, <= -2)\fP
+Determines how scientific notation is used (e.g. 5 543 000 = 5.543E6). A value >= 0 specifies the minimum exponent used. A value <= -2 specifies the multiplier used for the exponent.
 .PP
 .TP 8
 .B show ending zeroes, zeroes \fI(on*, off)\fP
@@ -495,6 +519,10 @@ Allow input of uncertainty using concise notation.
 Determines the default decimal separator.
 .PP
 .TP 8
+.B hexadecimal two's input, hextwosin\fI(on, off*)\fP
+Enables two's complement representation for input of negative hexadecimal numbers. All hexadecimal numbers starting with 8 or higher are negative, unless binary bits is set.
+.PP
+.TP 8
 .B ignore comma \fI(on, off*)\fP
 Allows use of ',' as thousands separator.
 .PP
@@ -520,6 +548,14 @@ See syntax section.
 .B read precision, readprec \fI(0* = off, 1 = always, 2 = when decimals)\fP
 If activated, numbers are interpreted as approximate with precision equal to the number of significant digits (3.20 = 3.20+/-0.005).
 .PP
+.TP 8
+.B simplified percentage, percent \fI(on*, off)\fP
+Interpret addition/subtraction of percentage as percentage increase/decrease of the first term (100 + 10% = 110).
+.PP
+.TP 8
+.B two's input, twosin \fI(on, off*)\fP
+Enables two's complement representation for input of negative binary numbers. All binary numbers starting with 1 are negative, unless binary bits is set.
+.PP
 Units:
 .PP
 .TP 8
@@ -527,7 +563,7 @@ Units:
 Enables automatic use of hecto, deca, deci, and centi.
 .PP
 .TP 8
-.B autoconversion, conv \fI(0 = none, 1 = optimal*, 2 = base, 3 = optimalsi, 4 = mixed)\fP
+.B autoconversion, conv \fI(0 = none, 1* = optimal, 2 = base, 3 = optimalsi, 4 = mixed)\fP
 Controls automatic unit conversion of the result. 'optimalsi' always converts non-SI units, while 'optimal' only converts to more optimal unit
 expressions, with less units and exponents.
 .PP
@@ -559,13 +595,17 @@ Use negative exponents instead of division for units in result (m/s = m*s^-1).
 .B sync units, sync \fI(on*, off)\fP
 .PP
 .TP 8
-.B temperature units, temp \fI(0 = hybrid*, 1 = absolute, 2 = relative)\fP
+.B temperature calculation, temp \fI(0* = hybrid, 1 = absolute, 2 = relative)\fP
 Determines how expressions with temperature units are calculated (hybrid acts as absolute if the expression contains different temperature units, otherwise as relative).
 .PP
 .TP 8
-.B update exchange rates, upxrates \fI(-1 = ask*, 0 = never, > 0 = days)\fP
+.B update exchange rates, upxrates \fI(-1* = ask, 0 = never, > 0 = days)\fP
 .PP
 Other:
+.PP
+.TP 8
+.B calculate as you type, autocalc \fI(on, off*)\fP
+Activates continuous calculation of the currently edited expression.
 .PP
 .TP 8
 .B clear history \fI(yes, no*)\fP
@@ -588,7 +628,7 @@ Save functions, units, and variables on exit.
 Save settings on exit.
 .PP
 .TP 8
-.B sigint action, sigint \fI(0 = kill*, 1 = exit, 2 = interrupt)\fP
+.B sigint action, sigint \fI(0 = kill, 1* = exit, 2 = interrupt)\fP
 Determines how the SIGINT signal (Ctrl+C) is handled.
 .SH "SYNTAX"
 Mathematical entities:
@@ -604,7 +644,7 @@ A number interval can be entered using the interval() function, the uncertainty(
 .PP
 .B Vectors and Matrices
 .br
-A matrix is a two-dimensional rectangular array of mathematical objects. Vectors are matrices with only one row or column, and thus one-dimensional sequences of objects. Vectors and matrices are generated by various functions, or using syntax in the form of [1 2 3 4] and [1 2; 3 4], with columns separated by space or comma and rows separated by semi-colon, or (1, 2, 3, 4) and ((1, 2), (3, 4)).
+A matrix is a two-dimensional rectangular array of mathematical objects. Vectors are matrices with only one row or column, and thus one-dimensional sequences of objects. Vectors and matrices are generated by various functions, or using syntax in the form of [1 2 3 4] and [1 2; 3 4], with columns separated by space or comma and rows separated by semi-colon, or (1, 2, 3, 4) and ((1, 2), (3, 4)). A vector with sequence of numbers can be created using "..." (e.g. "1...4"), or colon (e.g. "[1:4]", or "[1:1:4]" where the second value specifies the increment).
 .PP
 .B Variables/Constants
 .br
@@ -709,6 +749,8 @@ prepend with + or - to force/disable use of mixed units
 .br
 - optimal (convert to optimal unit)
 .br
+- prefix (convert to optimal prefix)
+.br
 - mixed (convert to mixed units, e.g. hours + minutes)
 .PP
 .TP 8
@@ -725,7 +767,7 @@ prepend with + or - to force/disable use of mixed units
 .br
 - hex# (show as hexadecimal number with specified number of bits)
 .br
-- sex, sexa2, sexa3, sexagesimal (show as sexagesimal number; sexa2 hides and sexa3 rounds arcseconds)
+- sexa, sexa2, sexa3, sexagesimal (show as sexagesimal number; sexa2 hides and sexa3 rounds arcseconds)
 .br
 - latitude, latitude2, longitude, longitude2 (show as sexagesimal latitude/longitude; latitude2 and longitude2 hide arcseconds)
 .br
@@ -767,12 +809,20 @@ prepend with + or - to force/disable use of mixed units
 - calendars
 .PP
 .TP 8
-.B Other conversion commands
+.B Fractions
 - fraction (show result as mixed fraction)
 .br
+- decimals (show result as decimal fraction)
+.br
+- 1/# (show as mixed fraction with specified denominator)
+.br
+prepend with - to show as simple fraction
+.PP
+.TP 8
+.B Other conversion commands
 - factors (factorize result)
 .PP
-Similarly \fIwhere\fP (or alternatively "/.") can be used at the end (but before "to"), for variable assignments, function replacements, etc. (e.g. "x+y where x=1 and y=2", "x^2=4 where x>0", and "sin(5) where sin()=cos()").
+Similarly \fIwhere\fP (or alternatively "/.") can be used at the end (but before "to"), for variable assignments, function replacements, etc. (e.g. "x+y where x=1 and y=2", "x^2=4 where x>0", and "sin(5) where sin()=cos()"). Variables assignments can also be placed before the expression, separated by comma, e.g. <quote>x=1, y=2, x+y</quote>, but this syntax is more strict.
 .PP
 Note that \fIto\fP and \fIwhere\fP can only be applied to the whole expression. Everything before the operator is always treated as the expression to convert (or apply replacement to), and everything after as the conversion/replacement expression, regardless of any parentheses.
 .SH EXAMPLES
@@ -890,9 +940,7 @@ plots the function y=x^2 from -5 to 5
 .B Units
 .PP
 .TP 8
-5 dm3 to L
-= 25 dm^3 to L
-.br
+5 dm3 to L = 5 dm^3 to L
 = 5 L
 .PP
 .TP 8
@@ -1084,6 +1132,13 @@ limit(ln(1 + 4x)/(3^x - 1); 0)
 = ((1; 2; 3); (4; 5; 6))
 .br
 = [1  2  3; 4  5  6] \fI(2x3 matrix)\fP
+.PP
+.TP 8
+1...5
+= (1:5)
+= (1:1:5)
+.br
+= [1  2  3  4  5]
 .PP
 .TP 8
 (1; 2; 3) * 2 - 2

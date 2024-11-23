@@ -1,7 +1,7 @@
 /*
     Qalculate (library)
 
-    Copyright (C) 2003-2007, 2008, 2016, 2018  Hanna Knutsson (hanna.knutsson@protonmail.com)
+    Copyright (C) 2003-2007, 2008, 2016, 2018, 2024  Hanna Knutsson (hanna.knutsson@protonmail.com)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -32,7 +32,36 @@ using std::vector;
 using std::ostream;
 using std::endl;
 
-#define REPRESENTS_FUNCTION(x, y) x::x() : MathFunction(#y, 1) {} int x::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {mstruct = vargs[0]; mstruct.eval(eo); if(mstruct.y()) {mstruct.clear(); mstruct.number().setTrue();} else {mstruct.clear(); mstruct.number().setFalse();} return 1;}
+#define REPRESENTS_FUNCTION(x, y) \
+	x::x() : MathFunction(#y, 1) {}\
+	int x::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {\
+		if(vargs[0].y()) {\
+			mstruct.clear();\
+			mstruct.number().setTrue();\
+			return 1;\
+		}\
+		mstruct = vargs[0];\
+		mstruct.eval(eo);\
+		if(mstruct.y()) {\
+			mstruct.clear();\
+			mstruct.number().setTrue();\
+			return 1;\
+		}\
+		if(eo.approximation != APPROXIMATION_EXACT) {\
+			mstruct = vargs[0];\
+			EvaluationOptions eo2 = eo;\
+			eo2.approximation = APPROXIMATION_EXACT;\
+			mstruct.eval(eo2);\
+			if(mstruct.y()) {\
+				mstruct.clear();\
+				mstruct.number().setTrue();\
+				return 1;\
+			}\
+		}\
+		mstruct.clear();\
+		mstruct.number().setFalse();\
+		return 1;\
+	}
 
 bool replace_infinity_v(MathStructure &m) {
 	if(m.isVariable() && m.variable()->isKnown() && ((KnownVariable*) m.variable())->get().isNumber() && ((KnownVariable*) m.variable())->get().number().isInfinite(false)) {
@@ -429,7 +458,7 @@ LengthFunction::LengthFunction() : MathFunction("len", 1) {
 	setArgumentDefinition(1, new TextArgument());
 }
 int LengthFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions&) {
-	mstruct = (int) vargs[0].symbol().length();
+	mstruct = (int) unicode_length(vargs[0].symbol());
 	return 1;
 }
 
@@ -728,6 +757,7 @@ int CustomSumFunction::calculate(MathStructure &mstruct, const MathStructure &va
 		mprocess.eval(eo2);
 		mstruct = mprocess;
 	}
+	if(!check_recursive_depth(mstruct)) return 0;
 	return 1;
 
 }
@@ -975,7 +1005,11 @@ int CommandFunction::calculate(MathStructure &mstruct, const MathStructure &varg
 		output += buffer;
 	}
 
+#ifdef _WIN32
+	if(_pclose(pipe) > 0 && output.empty()) {
+#else
 	if(pclose(pipe) > 0 && output.empty()) {
+#endif
 		CALCULATOR->error(true, _("Failed to run external command (%s)."), commandline.c_str(), NULL);
 		return 0;
 	}
@@ -1059,7 +1093,7 @@ PlotFunction::PlotFunction() : MathFunction("plot", 1, -1) {
 	LIST_PLOT_OPTION("xlog");
 	LIST_PLOT_OPTION("ylog");
 	LIST_PLOT_OPTION_VALUES("complex", "0, 1");
-	LIST_PLOT_OPTION_VALUES("grid", "0, 1");
+	LIST_PLOT_OPTION("grid");
 	LIST_PLOT_OPTION_ALT("linewidth", "lw");
 	LIST_PLOT_OPTION_ALT_WV("legend", "key"); LIST_PLOT_VALUE_FIRST("plot legend", "none"); LIST_PLOT_VALUE("plot legend", "top-left"); LIST_PLOT_VALUE("plot legend", "top-right"); LIST_PLOT_VALUE("plot legend", "bottom-left"); LIST_PLOT_VALUE("plot legend", "bottom-right"); LIST_PLOT_VALUE("plot legend", "below"); LIST_PLOT_VALUE_LAST("plot legend", "outside");
 	LIST_PLOT_OPTION("title");
@@ -1090,7 +1124,6 @@ int PlotFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, 
 		gsub(SIGN_MINUS, MINUS, svar);
 		string svalue;
 		bool b_option = false;
-		bool b_option_and_value = false;
 		while(!b_option) {
 			b_option = true;
 			if(equalsIgnoreCase(svar, "persistent")) {b_persistent = true; i_prev = 5; break;}
@@ -1123,18 +1156,15 @@ int PlotFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, 
 				if(i2 == string::npos) {
 					svalue.insert(0, svar);
 					svar = "";
-					b_option_and_value = false;
 					break;
 				}
 				svalue.insert(0, svar.substr(i2));
-				b_option_and_value = true;
 				svar = svar.substr(0, i2);
 				remove_blank_ends(svar);
 				b_option = false;
 			}
 		}
 		remove_blank_ends(svalue);
-		if(b_option_and_value && svalue.length() > 4 && svalue[0] == LEFT_PARENTHESIS_CH && svalue[1] == '\"' && svalue[svalue.length() - 1] == RIGHT_PARENTHESIS_CH && svalue[svalue.length() - 2] == '\"') svalue = svalue.substr(2, svalue.length() - 4);
 		if(!svalue.empty()) {
 			if(i_prev == 15) {
 				param.title = svalue;
@@ -1276,7 +1306,9 @@ int PlotFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, 
 		eo2.expand = eo.expand;
 	}
 	if(mstruct.isFunction() && (mstruct.function()->id() == FUNCTION_ID_HORZCAT || mstruct.function()->id() == FUNCTION_ID_VERTCAT)) mstruct.setType(STRUCT_VECTOR);
-	if(mstruct.isMatrix() && mstruct.columns() == 1 && mstruct.rows() > 1) mstruct.transposeMatrix();
+	if(mstruct.isMatrix() && mstruct.columns() == 1 && mstruct.rows() > 1) {
+		if(!mstruct.transposeMatrix()) return 0;
+	}
 	CALCULATOR->endTemporaryStopIntervalArithmetic();
 	vector<MathStructure> x_vectors, y_vectors;
 	vector<PlotDataParameters*> dpds;

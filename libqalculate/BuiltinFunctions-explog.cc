@@ -197,7 +197,7 @@ RootFunction::RootFunction() : MathFunction("root", 2) {
 	arg->setComplexAllowed(false);
 	arg->setHandleVector(true);
 	setArgumentDefinition(1, arg);
-	NumberArgument *arg2 = new NumberArgument("", ARGUMENT_MIN_MAX_NONE, true, true);
+	NumberArgument *arg2 = new NumberArgument("", ARGUMENT_MIN_MAX_NONE, true, false);
 	arg2->setComplexAllowed(false);
 	arg2->setRationalNumber(true);
 	arg2->setHandleVector(true);
@@ -441,6 +441,29 @@ bool RootFunction::representsNonZero(const MathStructure &vargs, bool allow_unit
 bool RootFunction::representsEven(const MathStructure&, bool) const {return false;}
 bool RootFunction::representsOdd(const MathStructure&, bool) const {return false;}
 bool RootFunction::representsUndefined(const MathStructure&) const {return false;}
+
+AllRootsFunction::AllRootsFunction() : MathFunction("allroots", 2) {
+	setArgumentDefinition(1, new NumberArgument(""));
+	setArgumentDefinition(2, new IntegerArgument("", ARGUMENT_MIN_MAX_POSITIVE, true, true, INTEGER_TYPE_SIZE));
+}
+int AllRootsFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
+	Number nr = vargs[0].number();
+	vector<Number> roots;
+	if(!nr.allroots(vargs[1].number(), roots)) return 0;
+	for(size_t i = 0; i < roots.size(); i++) {
+		if((eo.approximation == APPROXIMATION_EXACT && roots[i].isApproximate() && !vargs[0].isApproximate() && !vargs[1].isApproximate()) || (!eo.allow_complex && roots[i].isComplex() && !vargs[0].number().isComplex()) || (!eo.allow_infinite && roots[i].includesInfinity() && !vargs[0].number().includesInfinity())) {
+			return 0;
+		}
+	}
+	if(roots.size() == 1) {
+		mstruct = roots[0];
+	} else {
+		mstruct.clearVector();
+		for(size_t i = 0; i < roots.size(); i++) mstruct.addChild(roots[i]);
+	}
+	return 1;
+}
+
 
 SquareFunction::SquareFunction() : MathFunction("sq", 1) {
 	Argument *arg = new Argument("", false, false);
@@ -824,27 +847,43 @@ int LambertWFunction::calculate(MathStructure &mstruct, const MathStructure &var
 	}
 
 	bool b = false;
-	if(!vargs[1].isZero()) {
-		if(mstruct.isZero()) {
-			mstruct.set(nr_minus_inf, true);
-			b = true;
-		} else if(vargs[1].isMinusOne()) {
-			if(mstruct.isMultiplication() && mstruct.size() == 2 && mstruct[0].isNumber() && mstruct[1].isPower() && mstruct[1][0].isVariable() && mstruct[1][0].variable()->id() == VARIABLE_ID_E && mstruct[0].number() <= nr_minus_one && mstruct[1][1] == mstruct[0]) {
-				mstruct.setToChild(1, true);
-				b = true;
+#define LAMBERTW_TEST_X(x) ((vargs[1].isZero() && (x.representsNonNegative() || COMPARISON_IS_EQUAL_OR_LESS(x.compare(m_minus_one)))) || (!vargs[1].isZero() && COMPARISON_IS_EQUAL_OR_GREATER(x.compare(m_minus_one))))
+	if(mstruct.isMultiplication() && mstruct.size() >= 2 && (vargs[1].isZero() || vargs[1].isMinusOne())) {
+		for(size_t i = 0; i < mstruct.size(); i++) {
+			if(mstruct[i].isPower() && mstruct[i][0].isVariable() && mstruct[i][0].variable()->id() == VARIABLE_ID_E) {
+				if(mstruct.size() == 2) {
+					if(i == 1 && mstruct[1][1] == mstruct[0] && LAMBERTW_TEST_X(mstruct[0])) {
+						mstruct.setToChild(1, true);
+						b = true;
+					} else if(i == 0 && mstruct[0][1] == mstruct[1] && LAMBERTW_TEST_X(mstruct[1])) {
+						mstruct.setToChild(2, true);
+						b = true;
+					}
+				} else if(mstruct[i][1].isMultiplication() && mstruct[i][1].size() == mstruct.size() - 1) {
+					MathStructure *mpow = &mstruct[i];
+					mpow->ref();
+					mstruct.delChild(i + 1);
+					if(mstruct == (*mpow)[1] && LAMBERTW_TEST_X(mstruct)) {
+						mpow->unref();
+						b = true;
+					} else {
+						mstruct.insertChild_nocopy(mpow, i + 1);
+					}
+				}
+				break;
 			}
 		}
-
-	} else {
+	}
+	if(vargs[1].isZero()) {
 		if(mstruct.isZero()) {
 			b = true;
 		} else if(mstruct.isVariable() && mstruct.variable()->id() == VARIABLE_ID_E) {
 			mstruct.set(1, 1, 0, true);
 			b = true;
-		} else if(mstruct.isMultiplication() && mstruct.size() == 2 && mstruct[0].isMinusOne() && mstruct[1].isPower() && mstruct[1][0].isVariable() && mstruct[1][0].variable()->id() == VARIABLE_ID_E && mstruct[1][1].isMinusOne()) {
-			mstruct.set(-1, 1, 0, true);
-			b = true;
 		}
+	} else if(mstruct.isZero()) {
+		mstruct.set(nr_minus_inf, true);
+		b = true;
 	}
 	if(eo.approximation == APPROXIMATION_TRY_EXACT) CALCULATOR->endTemporaryStopMessages(b);
 	if(b) return 1;
@@ -865,3 +904,51 @@ int LambertWFunction::calculate(MathStructure &mstruct, const MathStructure &var
 	return -1;
 }
 
+bool check_recursive_depth(const MathStructure &m, size_t max_depth, bool show_error) {
+	if(max_depth == 0) {
+		if(show_error) CALCULATOR->error(true, _("Maximum recursive depth reached."), NULL);
+		return false;
+	}
+	for(size_t i = 0; i < m.size(); i++) {
+		if(!check_recursive_depth(m[i], max_depth - 1, show_error)) return false;
+	}
+	return true;
+}
+
+PowerTowerFunction::PowerTowerFunction() : MathFunction("powertower", 2) {
+	Argument *arg = new Argument("", false, false);
+	arg->setHandleVector(true);
+	setArgumentDefinition(1, arg);
+	setArgumentDefinition(2, new IntegerArgument("", ARGUMENT_MIN_MAX_POSITIVE));
+}
+bool PowerTowerFunction::representsNumber(const MathStructure &vargs, bool) const {return vargs.size() == 2 && vargs[0].representsNumber() && vargs[1].representsInteger() && vargs[1].representsPositive();}
+bool PowerTowerFunction::representsReal(const MathStructure &vargs, bool) const {return vargs.size() == 2 && vargs[0].representsNonNegative() && vargs[1].representsInteger() && vargs[1].representsPositive();}
+bool PowerTowerFunction::representsNonComplex(const MathStructure &vargs, bool b) const {return representsReal(vargs, b);}
+bool PowerTowerFunction::representsComplex(const MathStructure &vargs, bool) const {return false;}
+bool PowerTowerFunction::representsNonZero(const MathStructure &vargs, bool) const {return vargs.size() == 2 && vargs[0].representsNonZero() && vargs[1].representsInteger() && vargs[1].representsPositive();}
+int PowerTowerFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
+	if(vargs[0].isVector()) return 0;
+	mstruct = vargs[0];
+	mstruct.eval(eo);
+	if(mstruct.isVector()) return -1;
+	if(mstruct.isOne()) return 1;
+	MathStructure mbak(mstruct);
+	for(long int i = 1; vargs[1].number() > i; i++) {
+		if(CALCULATOR->aborted()) return false;
+		if(mstruct.isNumber()) {
+			Number nr(mbak.number());
+			if(nr.raise(mstruct.number()) && !(eo.approximation == APPROXIMATION_EXACT && nr.isApproximate() && !mstruct.isApproximate()) && !(!eo.allow_complex && nr.isComplex() && !mstruct.number().isComplex()) && !(!eo.allow_infinite && nr.includesInfinity() && !mstruct.number().includesInfinity())) {
+				mstruct.set(nr, true);
+				continue;
+			}
+		}
+		if((mstruct.isNumber() || i == 1) && vargs[1].number() - i >= 1000) {
+			CALCULATOR->error(true, _("Maximum recursive depth reached."), NULL);
+			return 0;
+		}
+		mstruct.raise(mbak);
+		mstruct.swapChildren(1, 2);
+	}
+	if(!check_recursive_depth(mstruct)) return 0;
+	return 1;
+}

@@ -528,11 +528,12 @@ bool calculate_differentiable_functions(MathStructure &m, const EvaluationOption
 	}
 	return b;
 }
-bool calculate_nondifferentiable_functions(MathStructure &m, const EvaluationOptions &eo, bool recursive, bool do_unformat, int i_type) {
+bool calculate_nondifferentiable_functions(MathStructure &m, const EvaluationOptions &eo, bool recursive, bool do_unformat, int i_type, size_t depth) {
+	if(recursive && !check_recursive_function_depth(depth)) return false;
 	if(m.isFunction() && m.function() != eo.protected_function) {
 		if((i_type <= 0 && (!function_differentiable(m.function()) || (m.function()->id() == FUNCTION_ID_INCOMPLETE_BETA && (m.size() != 3 || m[1].containsInterval(true, false, false, 1, true) || m[2].containsInterval(true, false, false, 1, true))) || (m.function()->id() == FUNCTION_ID_I_GAMMA && (m.size() != 2 || m[1].containsInterval(true, false, false, 1, true))))) || (i_type >= 0 && !contains_interval_variable(m, i_type))) {
 			if(m.calculateFunctions(eo, false, do_unformat)) {
-				if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type);
+				if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type, depth + 1);
 				return true;
 			} else {
 				return false;
@@ -548,12 +549,12 @@ bool calculate_nondifferentiable_functions(MathStructure &m, const EvaluationOpt
 			if(m[0].representsNegative(true)) {
 				m.setToChild(1);
 				m.negate();
-				if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type);
+				if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type, depth + 1);
 				return true;
 			}
 			if(m[0].representsNonNegative(true)) {
 				m.setToChild(1);
-				if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type);
+				if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type, depth + 1);
 				return true;
 			}
 			if(m[0].isMultiplication()) {
@@ -562,7 +563,7 @@ bool calculate_nondifferentiable_functions(MathStructure &m, const EvaluationOpt
 					m[i].transformById(FUNCTION_ID_ABS);
 				}
 				m.childrenUpdated();
-				if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type);
+				if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type, depth + 1);
 				return true;
 			}
 			if(eo.approximation != APPROXIMATION_EXACT) {
@@ -572,12 +573,12 @@ bool calculate_nondifferentiable_functions(MathStructure &m, const EvaluationOpt
 				if(mtest.representsNegative(true)) {
 					m.setToChild(1);
 					m.negate();
-					if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type);
+					if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type, depth + 1);
 					return true;
 				}
 				if(mtest.representsNonNegative(true)) {
 					m.setToChild(1);
-					if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type);
+					if(recursive) calculate_nondifferentiable_functions(m, eo, recursive, do_unformat, i_type, depth + 1);
 					return true;
 				}
 			}
@@ -587,7 +588,7 @@ bool calculate_nondifferentiable_functions(MathStructure &m, const EvaluationOpt
 	if(recursive) {
 		for(size_t i = 0; i < m.size(); i++) {
 			if(CALCULATOR->aborted()) break;
-			if(calculate_nondifferentiable_functions(m[i], eo, recursive, do_unformat, i_type)) {
+			if(calculate_nondifferentiable_functions(m[i], eo, recursive, do_unformat, i_type, depth + 1)) {
 				m.childUpdated(i + 1);
 				b = true;
 			}
@@ -1158,13 +1159,19 @@ MathStructure calculate_uncertainty(MathStructure &m, const EvaluationOptions &e
 	MathStructure *munc_i = NULL;
 	for(size_t i = 0; i < vars.size(); i++) {
 		if(!vars[i]->get().representsNonComplex(true)) {
-			b_failed = true; return m_zero;
+			b_failed = true;
+			uv->destroy();
+			if(munc_i) munc_i->unref();
+			return m_zero;
 		}
 		MathStructure *mdiff = new MathStructure(m);
 		uv->setInterval(vars[i]->get());
 		mdiff->replace(vars[i], muv);
 		if(!mdiff->differentiate(muv, eo) || contains_diff_for(*mdiff, muv) || CALCULATOR->aborted()) {
 			b_failed = true;
+			uv->destroy();
+			if(munc_i) munc_i->unref();
+			mdiff->unref();
 			return m_zero;
 		}
 		mdiff->replace(muv, vars[i]);
@@ -1645,7 +1652,7 @@ bool MathStructure::complexToExponentialForm(const EvaluationOptions &eo) {
 		return true;
 	} else if(representsReal(true)) {
 		return false;
-	} else if(!isVector()) {
+	} else if(!isVector() && !isComparison() && !isLogicalOr() && !isLogicalAnd()) {
 		MathStructure marg(CALCULATOR->getFunctionById(FUNCTION_ID_ARG), this, NULL);
 		marg *= nr_one_i;
 		CALCULATOR->beginTemporaryStopMessages();
@@ -1726,7 +1733,7 @@ bool MathStructure::complexToPolarForm(const EvaluationOptions &eo) {
 		return true;
 	} else if(representsReal(true)) {
 		return false;
-	} else if(!isVector()) {
+	} else if(!isVector() && !isComparison() && !isLogicalOr() && !isLogicalAnd()) {
 		MathStructure marg(CALCULATOR->getFunctionById(FUNCTION_ID_ARG), this, NULL);
 		CALCULATOR->beginTemporaryStopMessages();
 		EvaluationOptions eo2 = eo;
@@ -1764,6 +1771,7 @@ bool MathStructure::complexToCisForm(const EvaluationOptions &eo) {
 		mabs.eval(eo2);
 		marg.eval(eo2);
 		switch(eo2.parse_options.angle_unit) {
+			case ANGLE_UNIT_RADIANS: {marg.multiply(CALCULATOR->getRadUnit(), true); break;}
 			case ANGLE_UNIT_DEGREES: {marg.multiply(CALCULATOR->getDegUnit(), true); break;}
 			case ANGLE_UNIT_GRADIANS: {marg.multiply(CALCULATOR->getGraUnit(), true); break;}
 			case ANGLE_UNIT_CUSTOM: {if(CALCULATOR->customAngleUnit()) {marg.multiply(CALCULATOR->customAngleUnit(), true);} break;}
@@ -1779,6 +1787,7 @@ bool MathStructure::complexToCisForm(const EvaluationOptions &eo) {
 		EvaluationOptions eo2 = eo;
 		eo2.complex_number_form = COMPLEX_NUMBER_FORM_RECTANGULAR;
 		switch(eo2.parse_options.angle_unit) {
+			case ANGLE_UNIT_RADIANS: {multiply(CALCULATOR->getRadUnit(), true); break;}
 			case ANGLE_UNIT_DEGREES: {calculateMultiply(Number(180, 1), eo2); calculateDivide(CALCULATOR->getVariableById(VARIABLE_ID_PI), eo2); multiply(CALCULATOR->getDegUnit(), true); break;}
 			case ANGLE_UNIT_GRADIANS: {calculateMultiply(Number(200, 1), eo2); calculateDivide(CALCULATOR->getVariableById(VARIABLE_ID_PI), eo2); multiply(CALCULATOR->getGraUnit(), true); break;}
 			case ANGLE_UNIT_CUSTOM: {if(CALCULATOR->customAngleUnit()) {calculateMultiply(angle_units_in_turn(eo2, 1, 2), eo2); calculateDivide(CALCULATOR->getVariableById(VARIABLE_ID_PI), eo2); multiply(CALCULATOR->customAngleUnit(), true);} break;}
@@ -1793,6 +1802,7 @@ bool MathStructure::complexToCisForm(const EvaluationOptions &eo) {
 		EvaluationOptions eo2 = eo;
 		eo2.complex_number_form = COMPLEX_NUMBER_FORM_RECTANGULAR;
 		switch(eo2.parse_options.angle_unit) {
+			case ANGLE_UNIT_RADIANS: {multiply(CALCULATOR->getRadUnit(), true); break;}
 			case ANGLE_UNIT_DEGREES: {CHILD(1).calculateMultiply(Number(180, 1), eo2); CHILD(1).calculateDivide(CALCULATOR->getVariableById(VARIABLE_ID_PI), eo2); CHILD(1).multiply(CALCULATOR->getDegUnit(), true); break;}
 			case ANGLE_UNIT_GRADIANS: {CHILD(1).calculateMultiply(Number(200, 1), eo2); CHILD(1).calculateDivide(CALCULATOR->getVariableById(VARIABLE_ID_PI), eo2); CHILD(1).multiply(CALCULATOR->getGraUnit(), true); break;}
 			case ANGLE_UNIT_CUSTOM: {if(CALCULATOR->customAngleUnit()) {CHILD(1).calculateMultiply(angle_units_in_turn(eo2, 1, 2), eo2); CHILD(1).calculateDivide(CALCULATOR->getVariableById(VARIABLE_ID_PI), eo2); CHILD(1).multiply(CALCULATOR->customAngleUnit(), true);} break;}
@@ -1803,7 +1813,7 @@ bool MathStructure::complexToCisForm(const EvaluationOptions &eo) {
 		return true;
 	} else if(representsReal(true)) {
 		return false;
-	} else if(!isVector()) {
+	} else if(!isVector() && !isComparison() && !isLogicalOr() && !isLogicalAnd()) {
 		MathStructure marg(CALCULATOR->getFunctionById(FUNCTION_ID_ARG), this, NULL);
 		CALCULATOR->beginTemporaryStopMessages();
 		EvaluationOptions eo2 = eo;
@@ -1814,6 +1824,7 @@ bool MathStructure::complexToCisForm(const EvaluationOptions &eo) {
 			MathStructure mabs(CALCULATOR->getFunctionById(FUNCTION_ID_ABS), this, NULL);
 			mabs.eval(eo2);
 			switch(eo2.parse_options.angle_unit) {
+				case ANGLE_UNIT_RADIANS: {marg.multiply(CALCULATOR->getRadUnit(), true); break;}
 				case ANGLE_UNIT_DEGREES: {marg.multiply(CALCULATOR->getDegUnit(), true); break;}
 				case ANGLE_UNIT_GRADIANS: {marg.multiply(CALCULATOR->getGraUnit(), true); break;}
 				case ANGLE_UNIT_CUSTOM: {if(CALCULATOR->customAngleUnit()) {marg.multiply(CALCULATOR->customAngleUnit(), true);} break;}
@@ -2157,7 +2168,7 @@ bool warn_ratio_units(MathStructure &m, bool top_level = true) {
 		}
 	} else {
 		for(size_t i = 0; i < m.size(); i++) {
-			if(warn_ratio_units(m[i], false)) return true;
+			if(warn_ratio_units(m[i], m.isFunction())) return true;
 		}
 	}
 	return false;
@@ -2197,7 +2208,7 @@ bool try_isolate_x(MathStructure &mstruct, EvaluationOptions &eo3, const Evaluat
 		else x_var2 = &mstruct.find_x_var();
 		if(x_var2->isUndefined() || (mtest[0] == *x_var2 && !mtest[1].contains(*x_var2))) {
 			CALCULATOR->endTemporaryStopMessages();
-			 return false;
+			return false;
 		}
 		if(mtest.isolate_x(eo3, eo, *x_var2, false)) {
 			if(test_comparisons(mstruct, mtest, *x_var2, eo3) >= 0) {
@@ -2437,6 +2448,22 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 		convert_temperature_units(*this, eo);
 	}
 
+	if(isComparison() && SIZE == 2 && CHILD(0).isFunction() && CHILD(0).function()->subtype() == SUBTYPE_USER_FUNCTION && CHILD(0).size() == 1 && CHILD(0)[0].isSymbolic() && CHILD(0).function()->getArgumentDefinition(1) && CHILD(0).function()->getArgumentDefinition(1)->type() == ARGUMENT_TYPE_TEXT && (CHILD(0).function()->referenceName() == "awg" || CHILD(0).function()->referenceName() == "awgd") && CALCULATOR->defaultAssumptions()->type() < ASSUMPTION_TYPE_REAL && CHILD(0)[0].symbol().find_first_not_of(NUMBERS "/" SPACE) != string::npos) {
+		MathStructure mtest;
+		ParseOptions pa = eo.parse_options;
+		pa.base = BASE_DECIMAL;
+		CALCULATOR->beginTemporaryStopMessages();
+		CALCULATOR->parse(&mtest, CHILD(0)[0].symbol(), pa);
+		CALCULATOR->endTemporaryStopMessages();
+		if(!mtest.representsReal(true)) {
+			AssumptionType t = CALCULATOR->defaultAssumptions()->type();
+			CALCULATOR->defaultAssumptions()->setType(ASSUMPTION_TYPE_REAL);
+			eval(eo);
+			CALCULATOR->defaultAssumptions()->setType(t);
+			return *this;
+		}
+	}
+
 	EvaluationOptions feo = eo;
 	feo.structuring = STRUCTURING_NONE;
 	feo.do_polynomial_division = false;
@@ -2562,8 +2589,6 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 
 				MathStructure mtest(*this);
 
-				if(!representsScalar()) b_failed = true;
-
 				// calculate uncertainty
 				if(m_type == STRUCT_VECTOR) {
 					munc.clearVector();
@@ -2580,6 +2605,8 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 							if(b_failed) break;
 						}
 					}
+				} else if(!representsScalar()) {
+					b_failed = true;
 				} else {
 					munc = calculate_uncertainty(*this, eo, b_failed);
 				}

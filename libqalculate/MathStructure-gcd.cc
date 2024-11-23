@@ -298,6 +298,7 @@ bool heur_gcd(const MathStructure &m1, const MathStructure &m2, MathStructure &m
 bool MathStructure::lcm(const MathStructure &m1, const MathStructure &m2, MathStructure &mlcm, const EvaluationOptions &eo, bool check_args) {
 	if(m1.isNumber() && m2.isNumber()) {
 		mlcm = m1;
+		if(!mlcm.isInteger() || !m2.isInteger()) return mlcm.number().multiply(m2.number());
 		return mlcm.number().lcm(m2.number());
 	}
 	if(check_args && (!m1.isRationalPolynomial() || !m2.isRationalPolynomial())) {
@@ -382,7 +383,8 @@ bool MathStructure::gcd(const MathStructure &m1, const MathStructure &m2, MathSt
 		lcm_of_coefficients_denominators(m1, nlcm1);
 		Number nlcm2;
 		lcm_of_coefficients_denominators(m2, nlcm2);
-		nlcm1.lcm(nlcm2);
+		if(!nlcm1.isInteger() || !nlcm2.isInteger()) nlcm1.multiply(nlcm2);
+		else nlcm1.lcm(nlcm2);
 		if(!nlcm1.isOne()) {
 			MathStructure mtmp1, mtmp2;
 			multiply_lcm(m1, nlcm1, mtmp1, eo);
@@ -782,18 +784,27 @@ bool restore_fracpow(MathStructure &mstruct, UnknownVariable *uv, const Evaluati
 	return false;
 }
 
-bool do_simplification(MathStructure &mstruct, const EvaluationOptions &eo, bool combine_divisions, bool only_gcd, bool combine_only, bool recursive, bool limit_size, int i_run) {
+#define I_RUN_ARG(x) ((depth * 100) + x)
+
+bool do_simplification(MathStructure &mstruct, const EvaluationOptions &eo, bool combine_divisions, bool only_gcd, bool combine_only, bool recursive, bool limit_size, int i_run_pre) {
 
 	if(!eo.expand || !eo.assume_denominators_nonzero || mstruct.size() == 0) return false;
 
+	int i_run = i_run_pre % 100;
+	int depth = i_run_pre / 100;
+	if(i_run > 50) {
+		i_run -= 100;
+		depth++;
+	}
+
 	if(!combine_only && combine_divisions && i_run == 1) {
-		bool b_ret = do_simplification(mstruct, eo, combine_divisions, only_gcd, combine_only, recursive, limit_size, -1);
+		bool b_ret = do_simplification(mstruct, eo, combine_divisions, only_gcd, combine_only, recursive, limit_size, I_RUN_ARG(-1));
 		vector<UnknownVariable*> uv;
 		replace_fracpow(mstruct, uv);
 		if(uv.size() > 0) {
 			MathStructure mbak(mstruct);
 			mstruct.evalSort(true);
-			bool b = do_simplification(mstruct, eo, combine_divisions, only_gcd, combine_only, recursive, limit_size, -1) && mbak != mstruct;
+			bool b = do_simplification(mstruct, eo, combine_divisions, only_gcd, combine_only, recursive, limit_size, I_RUN_ARG(-1)) && mbak != mstruct;
 			EvaluationOptions eo2 = eo;
 			eo2.expand = false;
 			for(size_t i = 0; i < uv.size(); i++) {
@@ -803,20 +814,22 @@ bool do_simplification(MathStructure &mstruct, const EvaluationOptions &eo, bool
 			mstruct.evalSort(true);
 			if(b) {
 				b_ret = true;
-				if(mstruct.calculatesub(eo, eo)) do_simplification(mstruct, eo, combine_divisions, only_gcd, combine_only, recursive, limit_size, -1);
+				if(mstruct.calculatesub(eo, eo)) do_simplification(mstruct, eo, combine_divisions, only_gcd, combine_only, recursive, limit_size, I_RUN_ARG(-1));
 			}
 		}
 		return b_ret;
 	}
 
-	if(recursive) {
+	if(recursive && depth < 10) {
 		bool b = false;
+		depth++;
 		for(size_t i = 0; i < mstruct.size(); i++) {
-			b = do_simplification(mstruct[i], eo, combine_divisions, only_gcd || (!mstruct.isComparison() && !mstruct.isLogicalAnd() && !mstruct.isLogicalOr()), combine_only, true, limit_size, i_run) || b;
+			if(do_simplification(mstruct[i], eo, combine_divisions, only_gcd || (!mstruct.isComparison() && !mstruct.isLogicalAnd() && !mstruct.isLogicalOr()), combine_only, true, limit_size, I_RUN_ARG(i_run))) b = true;
 			if(CALCULATOR->aborted()) return b;
 		}
 		if(b) mstruct.calculatesub(eo, eo, false);
-		return do_simplification(mstruct, eo, combine_divisions, only_gcd, combine_only, false, limit_size, i_run) || b;
+		depth--;
+		return do_simplification(mstruct, eo, combine_divisions, only_gcd, combine_only, false, limit_size, I_RUN_ARG(i_run)) || b;
 	}
 	if(mstruct.isPower() && mstruct[1].isNumber() && mstruct[1].number().isRational() && !mstruct[1].number().isInteger() && mstruct[0].isAddition() && mstruct[0].isRationalPolynomial()) {
 		MathStructure msqrfree(mstruct[0]);
@@ -1366,7 +1379,7 @@ bool do_simplification(MathStructure &mstruct, const EvaluationOptions &eo, bool
 				if(i == 0) mstruct.calculateDivide(divs[i], eo);
 				else mstruct.last().calculateDivide(divs[i], eo);
 				if(i == 0 && i_run <= 1 && mstruct.isAddition()) {
-					do_simplification(mstruct, eo, true, false, false, false, limit_size, 2);
+					do_simplification(mstruct, eo, true, false, false, false, limit_size, I_RUN_ARG(2));
 				}
 			}
 		}

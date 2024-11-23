@@ -1,3 +1,502 @@
+2024-11-20 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix test of equation solution in some cases (fixes "sqrt(x-1/x)+sqrt(1-1/x)-x=0" when approximation is not exact)
+
+2024-11-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Option to specify number of displayed significant digits, instead of using precision (if PrintOptions::max_decimals < -1, digits = -max_decimals)
+
+2024-11-15 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve decision to automatically convert unchanged quantity with unit
+	* Fix segfault with very large integer raised by very large integer (integer length multiplied by exponent overflows long long int), e.g. "fs^EiK"
+	* Fix wrong output of converted unit with non-numerical exponent in some cases (e.g. ft^x converted to m without expansion)
+	* Improve calculation of formatted string length (for filtering of multiple results in Calculator::calculateAndPrint())
+	* Remove "timed out" alternative results in Calculator::calculateAndPrint()
+	* Place "approx." on same line as value (instead of as equals sign) in qalc
+	* Display "aborted" for long aborted result in qalc
+
+2024-11-11 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix case conversion of µ to M and similar (compare initial text string when converted back to lower case)
+
+2024-11-06 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add multilimit() function
+
+2024-11-06 Stefan Gerlach <stefan.gerlach@uni-konstanz.de>
+
+	* Fix issues building with MSVC
+
+2024-11-02 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix spacing after implicit mulitplication interpretation question in qalc
+	* Fix formatting when commands/expression is read from file before interactive mode
+
+2024-10-27 Marko Zajc <marko@zajc.tel>
+
+	* Add triple() function
+
+2024-10-19 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix clear using Ctrl+L when input line is not empty
+	* Improved detection of charsets other than UTF-8
+
+2024-10-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add calculate as you type (disabled by default) to qalc
+
+2024-10-14 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve ability to abort matrix functions (e.g. identity() with large argument)
+
+2024-10-07 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not show warning for logarithmic ratio unit, with quantity, as function argument
+
+2024-09-29 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix inability to abort randpoisson() with very high rate value
+
+2024-09-28 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix crash with empty vector in plot function, e.g. plot([])
+
+2024-09-20 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not show single input decimal number as only combined fraction if fraction format is set to dual
+	* Apply fraction format also for integers if set to percent, permille, or permyriad
+	* Add (hidden) support for percent, permille, and permyriad fraction formats in qalc
+
+2024-09-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix segfault with recursive (self-referencing) function
+
+2024-09-17 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix save definitions option
+	* When questions are avoided (when reading commands/expression from file or in result only mode), create temporary objects for "variable" and "function" commands, do not ask before replacing object, and fail without question for illegal names
+	* Avoid asking questions when reading commands/expressions from file before interactive mode
+	* Fix line break for output from command line expression or file, before interactive mode
+	* Update "exp" option documentation to reflect that custom negative values are allowed
+	* "unkeep" command (reverse of "keep")
+
+2024-09-16 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Remove unnecessary calculation for output of integers with non-decimal number base (fixes delay with very high precision)
+	* Fix input of negative exponent in scientific e notation with rpn syntax
+
+2024-09-12 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add nmi symbol for nautical mile
+
+2024-09-01 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not show single input decimal number as fraction by default if small or large enough to be displayed using scientific notation
+
+2024-08-31 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Support abbreviations for scientific (sci) and engineering (eng) as options for scientific notation (exp)
+
+2024-08-30 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix superfluous "did you mean..." warning for two functions with parenthesis without separator (e.g. "atan2(a,b)atan2(c,d)")
+	* Fix definite integral for 1/sqrt(1-x^2), with lower limit <= -1 and/or upper limit >= 1, and similar (temporary workaround)
+
+2024-08-10 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix parsing of 1°2'3" as 1°+2'+3" (and similar)
+	* Update nounit() function description
+
+2024-08-04 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add Calculator::parseToExpression()
+	* Minor fixes for "to" conversion in Calculator::calculateAndPrint()
+
+2024-07-24 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add free_thread_caches() function
+	* Place n and C last in variable isolation priority order
+	* Fix interpretation of mH₂O, and related units with Unicode subscript, in qalc
+	* Fix memory leaks
+
+2024-07-14 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix saving of percentage interpretation in qalc
+
+2024-07-09 Marko Zajc <marko@zajc.eu.org>
+
+	* Disable load() and export() functions when --disable-insecure compile option is enabled
+	* Fix a potential segfault when freeing DataObject
+
+2024-07-09 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve compatibility with MSVC (including replacement of variable length arrays)
+	* Show error for unrecognized command line options when expression is separated from options by "--"
+
+2024-07-03 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix Calculator::reset()
+
+2024-07-01 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve handling of "where" expression when variable name is placed after inequality symbol
+	* Improve handling of "where" expression in exact mode
+	* Improve removal of n in exact mode
+
+2024-06-27 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Return n >= a + 1 for n > a, and n <= a - 1 for n < a, if a is an integer (and n represents an integer)
+
+2024-06-22 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Always return false for 1/f(x)=0 (not f(x)=infinity)
+	* Do not solve ln(f(x))=-infinity
+
+2024-06-15 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add therm and thermie units (IT, ISO, and U.S.)
+	* Use exact Btu relation
+	* Use symbol "cal" for thermochemical (instead of international table) calorie
+	* Add IUNS calorie
+	* Fix input of scientific E-notation using lowercase e in numbers using concise interval notation, in expressions
+
+2024-06-11 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Always allow "ignore comma" option (will change default decimal separator if not dot), and show more informative error message for "ignore dot" if decimals separator is dot
+	* Do not mark decimal separator question as asked after percentage calculation has been asked
+
+2024-06-10 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add MathStructure::representsFinite() to improve handling when unknown if value is real or complex
+	* Fix "bit width" and "signed integer" arguments in setbits()
+
+2024-06-06 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Preserve allow_infinite parameter for recursive comparison in MathStructure::equals()
+	* Return true for infinity multiplied by zero in MathStructure::representsUndefined()
+	* Add recursion counter to MathStructure::isolate_x() and MathStructure::isolate_x_sub() (variable isolation) to avoid stack overflow
+	* Return true if both text strings are empty in equalsIgnoreCase()
+	* Fix parenthesis added in front of multiplication sign in some cases
+	* Use less strict rules when comparing with previous expression (to avoid infinite loop) when isolating variable, in MathStructure::isolate_x_sub(); * Do not apply x+x^(1/a)=b => x=(b-x)^a if (part of) x represents undefined
+
+2024-06-05 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix negative-size-param (crash) when a variable name/symbol with more than 20 characters is used in "where" expression
+	* Fix approximation mode changed with AUTOMATIC_APPROXIMATION_SINGLE in calculate_dual_exact (affects calculate-as-you-type in qalculate-qt)
+
+2024-05-30 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Update values of physical constants with CODATA 2022 values; Change title and names/symbols of weak mixing angle (prepend "sin2" to theta variants and change order)
+
+2024-05-26 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Return exact negative integers in log10()
+	* Decrease (potentially) number of false negatives for represents... functions
+	* Add descriptions for is... and represents... functions
+	* Fix RoundFunction::represents...
+	* Check for exact solution equaly simplified as approximation value in calculate_dual_exact when approximation is AUTOMATIC_APPROXIMATION_SINGLE
+	* Fix confusing behaviour of complex forms other than rectangular in some case with equalities and inequalities
+
+2024-05-23 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Remove n from equation solution if possible using assumptions of x
+	* Fix auto/dual approximation with "where" expression
+	* Fix Number::getCentralInteger()
+	* "n > a" equals "n >= floor(a)", if a is not an integer, and equivalent for other inequality operators
+	* Fix handling of where expressions with multiple inequality statements for a single variable, e.g. "where x>0 and x<10" (parsed expression were as aborted, and calculated value always 1)
+
+2024-05-19 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix potential (but unlikely) segfault when integrating expression with abs() and empty ln()
+	* Add allroots() function
+	* Fix unnecessary parenthesis (with wrong color for closing bracket) around unit with exponent for colorized HTML output (affects qalculate-qt)
+
+2024-05-12 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add additional names/symbols (tr,pla,rev,revolution,revolutions,cyc,cycle,cycles) to turn unit
+	* Add rpm unit (= turns/min)
+
+2024-05-10 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix qalc not exiting after factorization in non-interactive mode
+
+2024-05-06 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix a^(f(x))=a^(b*g(x)) where b=2 or b=3
+
+2024-05-01 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Avoid potential issues with equations and inequalities caused possibly modified comparison type property (primarily potentially resulting in AND instead of OR and vice versa)
+	* Fix multiplication sign after exponentiation factor for unformatted output without unicode exponents
+
+2024-04-30 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix "(ax+1)^n > 1" and "(ax+1)^n >= 1", where n is even and a is not 1, returning false
+
+2024-04-27 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix -Wdocumentation warnings
+
+2024-04-21 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Ask for the desired interpretation the first time percent addition is used (e.g. 100 + 10% equals 110 or 100.1)
+
+2024-04-21 Fishhh <hubert.gluchowski19@gmail.com>
+
+	* Fix Number::equals(0, ..., true) when number is infinite (also affects MathStructure::equals(), MathStructure::replace(), and MathStructure::calculateReplace() and replace() function)
+
+2024-04-20 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not show error for 2nd argument with unknown variable in root() function
+	* Fix precision for approximate data set number values, without uncertainty explicitely specified, with positive scientific e-notation exponent
+	* Ignore two's input setting for hexadecimal floating-point literals using 0x...p... notation
+
+2024-04-15 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add Sun to planets data set
+	* Add solar radius, mass, and luminosity as units
+
+2024-04-11 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add support for column vector in if() function
+
+2024-04-07 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Relax conditions for (x^a)^b=x^(a*b) and x^a*x^b=x^(a+b) when complex numbers are deactivated (fixes segfaults)
+
+2024-04-06 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add support for solving root(a, x)=b (requires rational value for ln(a)/ln(b))
+	* Use parentheses for exponent using scientific notation (with power of 10)
+	* Add checkAvailableVersion() variant returning package URL
+
+2024-04-03 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add multiples() function (returns multiples of a number within specified range)
+
+2024-04-02 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add powertower() function
+	* Add recursive depth limit to avoid running out of stack memory (causing segfault)
+
+2024-03-25 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Solve equations containing if() function
+	* Fix awg(x)=... and awgd(x)=... when default assumption type is not real and fix solve() with these equations
+
+2024-03-21 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Support integer factorization of integers in matrix/vector, and of numerator and denominator in rational number
+
+2024-03-12 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix setbits()
+
+2024-03-10 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not apply "read precision" setting to integer exponents for values with units
+	* Change from line to point (or dot) plot style for data with many discontinuous points
+
+2024-03-08 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Replace special colorize values, for selection of Unicode exponents, with different use_unicode_signs values
+	* Use Unicode exponents, in MathStructure::print(), if format is false, even if tagtype is not TAG_TYPE_TERMINAL
+	* Fix Unicode exponents with number bases < 10
+
+2024-03-01 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve parsing of text arguments - fix quotation mark replaced by feet or inches and % replaced by percent variable, remove quotation marks when parts of argument are quoted separately (a "b" "c" = "a b c"), and do not replace quoted curly brackets in expression unless necessary
+	* Do not use sexagesimal output format for very large numbers (when scientific notation is necessary for integer part) and reduce maximal number of decimals (for last position when previous positions is non-zero)
+	* Handle case when initial guess results in division by zero, and avoid unnecessary error messages, in newtonsolve()
+
+2024-02-27 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix BTC exchange rate from coinbase, if available from other source, not used before restart after exchange rates update, and do not mark BTC as hidden (places the unit in submenu in GUIs)
+
+2024-02-20 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Support "where" statements, without "where", before main expression, e.g. "a=2, b=3; a^b"
+
+2024-02-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Change handling of "where" expression (create temporary variables) to allow previously undefined variable names and to avoid confusing output of parsed expression (e.g. redefined "c" was displayed as SpeedOfLight)
+
+2024-02-16 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Detect spelling errors in qalc options (when using set command)
+
+2024-02-14 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Change handling a vectors in multiple function arguments (of non-vector type) - return vector instead of matrix, require equal number of elements, and use the same vector index for all argument for each function instance (e.g. atan2([1  2], [3  4]) = [atan2(1, 3)  atan(2 4)]
+	* Set handle vector property by default, for text, date, and boolean arguments, and for arguments, in global non-builtin functions, without specified type
+	* Enable parsing of vectors for text arguments
+	* Add foreach() function (simplified for function, using vector instead of counter)
+	* Add setbits() function
+	* Add flip() function (changes order of elements in vectors and matrices)
+	* Add "binary bits" option in qalc
+
+2024-02-08 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add LightSecond, LightMinute, and LightHour units
+	* Add integerDigits(), digitGet(), and digitSet() functions
+	* Add more rounding methods and replace PrintOptions::round_halfway_to_even (and truncate time zone value hack) with PrintOptions::rounding
+	* Add PrintOptions::duodecimal_symbols (replace time zone value hack)
+	* Replace PrintOptions::lower_case_e with PrintOptions::exp_display and add option for scientific notation without E (10^x)
+	* Add ParseOptions::binary_bits (replaces non-boolean values for twos_complement and hexadecimal_twos_complement)
+	* Add keep command, which makes variable or function non-temporary, in qalc
+
+2024-02-02 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Check for potential spelling mistakes in unrecognized qalc commands
+	* Show error messages for command without argument, if not a reasonable expression, even if "/" is not used
+
+2024-01-31 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add support for hexadecimal floating-point literals using 0x...p... notation (0x1.4p3 = 0x1.4 * 2^3 = 10)
+	* In dsolve(), assume that C is real if y is (fixes dsolve(diff(y, x) = y)), and, if y cannot be isolated completely, return resulting equation in solve() function (e.g. dsolve(diff(y , x) = y)= solve(ln(y) = x + C, y))
+
+2024-01-30 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add support for a...b syntax for sequence (vector) of integers
+	* Add support for j:k (for sequence of numbers with increment 1), and j:i:k (with increment i) syntax
+	* Add colon() function (used by new syntax)
+	* Use parentheses for number with scientific notation in more cases
+
+2024-01-29 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not list reactivated global objects when using "list" command (without argument)
+	* Recognize function name with parentheses appended in argument of "delete" command (useful for deletion of function with same name as variable or unit)
+	* Add bitset() and bitget() functions
+
+2024-01-27 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Support scientific notation using 10^x instead of e notation for non-html output and in qalc
+
+2024-01-26 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Allow specification of numbers of bits for two's complement input
+	* If number of bits are not enough for output of binary or hexadecimal number, use default, instead of minimal, number of bits
+
+2024-01-22 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Detect potential spelling errors in suspicious expressions
+
+2024-01-21 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix "set cplxform cis"
+	* Fix conversion to angle unit for complex angle, cis and polar forms
+	* Improve output of complex angle form in some cases
+	* Do not display exact result for dual approximation if parsed expression differs (can occur in some cases with conversion to angle unit), and in some cases where the only differences is how exact numbers in function arguments are
+
+2024-01-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Allow multiple options, separated by semicolon, with a single --set (-s) command line argument
+
+2024-01-14 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* lambertw(x*e^x, 0)=x if x>=-1
+
+2024-01-11 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix -no... command line options when using double dash, e.g. "--nocurrencies"
+	* Avoid radian unit missing error message with --nounits command line option
+	* Exit with error status code if command line expression generates error
+
+2024-01-03 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Allow values higher than 1 (true) to specify line width of plot grid
+
+2023-12-28 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add support for "decimals" "to"-conversion (display as decimal fraction)
+	* log(x, 1) is always zero when x has non-zero imaginary part
+
+2023-12-25 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix log(1, 1)
+
+2023-12-23 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve handling of zero solution and initial guess in newtonsolve() and secantsolve(), and check validity of solution
+
+2023-12-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix "to"-conversion to prefix and add "prefix" conversion option (for optimal prefix)
+	* Fix parsed expression repeated in result with some functions
+	* Allow omission of equals zero in solve() function
+	* Convert to simple fraction if value only contains integers, when converting to fixed denominator
+	* Improve handling of text arguments with default value consisting of two double quotes (empty string)
+
+2023-12-16 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix segfault in newtonsolve() and secantsolve() when equation does not contain variable
+	* Algebra and calculus functions represents scalars if all arguments do
+
+2023-12-14 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add support for two's complement input (short settings "twosin" and "hextwosin") in qalc
+	* Fix current value of hextwos in mode help
+
+2023-11-21 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix BTC exchange rate (data now seem to always use USD)
+	* Replace exchangerate.host (now requires API key) with currency-api (https://cdn.jsdelivr.net/gh/fawazahmed0/currency-api@1/latest/currencies/eur.json)
+
+2023-11-19 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve formatting of base unit(s) in unit information in qalc
+	* Fix plural name of U.S. survey rods
+	* Improve output of defs2doc
+
+2023-11-13 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Ignore spaces when converting text string to integer
+
+2023-10-31 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Display all exponents 0-9 using Unicode superscript characters (not, as before, only for units), in qalc (using TAG_TYPE_TERMINAL), if these are the only exponents in the expression (behaviour can be altered using uniexp option)
+
+2023-10-30 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add history command, listing expression history
+	* Ignore underscore in number
+
+2023-10-29 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add fraction formats for output using percent, permille, and permyriad
+	* Add additional year definitions as units
+	* Improve handling of (x*sqrt(x)-y*sqrt(y))/(sqrt(x)-sqrt(y))=x+sqrt(x*y)+y
+
+2023-10-27 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Support for specifying a fixed denominator for display of fractions
+	* Fix case insensitive comparison for strings with more than two or more consecutive Unicode characters in qalc
+
+2023-10-25 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix parsing of case insensitive object name ending with Unicode character when followed by another Unicode character in expression, e.g. микрометр
+
+2023-10-21 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix output of value converted to unit expression with numerical multiplier in denominator, e.g. L/(100 km)
+
+2023-10-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix segfault (infinite loop) when trying to solve (x*sqrt(x)-y*sqrt(y))/(sqrt(x)-sqrt(y))=x+sqrt(x*y)+y
+
+2023-10-06 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix asin(x)=a, acos(x)=a, and atan(x)=a, when a contains an angle unit and default angle unit is set
+
+2023-09-28 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix Calculator::hasWhereExpression()
+
+2023-09-23 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Return gcd of numerators divided by lcm of denominators in gcd() with non-integer rational numbers, and vice versa for lcm()
+
 2023-09-16 Hanna Knutsson <hanna.knutsson@protonmail.com>
 
 	* Fix display of matrices and vectors with complex number form other than rectangular

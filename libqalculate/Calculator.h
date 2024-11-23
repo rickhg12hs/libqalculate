@@ -1,7 +1,7 @@
 /*
     Qalculate
 
-    Copyright (C) 2003-2007, 2008, 2016-2018  Hanna Knutsson (hanna.knutsson@protonmail.com)
+    Copyright (C) 2003-2007, 2008, 2016-2024  Hanna Knutsson (hanna.knutsson@protonmail.com)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -14,7 +14,10 @@
 
 #include <libqalculate/includes.h>
 #include <libqalculate/util.h>
-#include <sys/time.h>
+
+#ifndef _MSC_VER
+#	include <sys/time.h>
+#endif
 
 /** @file */
 
@@ -111,7 +114,7 @@ struct PlotParameters {
 	/// Logarithmic base for the x-axis. Default: 10
 	int x_log_base;
 	/// If  a grid shall be shown in the plot. Default: false
-	bool grid;
+	unsigned int grid;
 	/// Width of lines. Default: 2
 	int linewidth;
 	/// If the plot shall be surrounded by borders on all sides (not just axis). Default: false
@@ -171,6 +174,7 @@ typedef enum {
 #define MESSAGE_CATEGORY_PARSING			1
 #define MESSAGE_CATEGORY_WIDE_INTERVAL			10
 #define MESSAGE_CATEGORY_IMPLICIT_MULTIPLICATION	11
+#define MESSAGE_CATEGORY_NO_PROPER_INTERVAL_SUPPORT	12
 
 
 /// A message with information to the user. Primarily used for errors and warnings.
@@ -465,9 +469,7 @@ class Calculator {
 	* @returns The result of the calculation.
 	* \since 2.6.0
 	*/
-	std::string calculateAndPrint(std::string str, int msecs = 10000, const EvaluationOptions &eo = default_user_evaluation_options, const PrintOptions &po = default_print_options);
-	std::string calculateAndPrint(std::string str, int msecs, const EvaluationOptions &eo, const PrintOptions &po, std::string *parsed_expression);
-	std::string calculateAndPrint(std::string str, int msecs, const EvaluationOptions &eo, const PrintOptions &po, AutomaticFractionFormat auto_fraction, AutomaticApproximation auto_approx = AUTOMATIC_APPROXIMATION_OFF, std::string *parsed_expression = NULL, int max_length = -1, bool *result_is_comparison = NULL);
+	std::string calculateAndPrint(std::string str, int msecs = 10000, const EvaluationOptions &eo = default_user_evaluation_options, const PrintOptions &po = default_print_options, std::string *parsed_expression = NULL);
 	/** Calculates an expression.and outputs the result to a text string. The expression should be unlocalized first with unlocalizeExpression().
 	*
 	* Unlike other functions for expression evaluation this function handles ending "to"-commands, in addition to unit conversion, such "to hexadecimal" or to "fractions", similar to the qalc application.
@@ -480,7 +482,7 @@ class Calculator {
 	* @returns The result of the calculation.
 	* \since 4.0.0
 	*/
-	std::string calculateAndPrint(std::string str, int msecs, const EvaluationOptions &eo, const PrintOptions &po, AutomaticFractionFormat auto_fraction, AutomaticApproximation auto_approx, std::string *parsed_expression, int max_length, bool *result_is_comparison, bool format, int colorize = 0, int tagtype = TAG_TYPE_HTML);
+	std::string calculateAndPrint(std::string str, int msecs, const EvaluationOptions &eo, const PrintOptions &po, AutomaticFractionFormat auto_fraction, AutomaticApproximation auto_approx = AUTOMATIC_APPROXIMATION_OFF, std::string *parsed_expression = NULL, int max_length = -1, bool *result_is_comparison = NULL, bool format = false, int colorize = 0, int tagtype = TAG_TYPE_HTML);
 	int testCondition(std::string expression);
 	//@}
 
@@ -718,6 +720,22 @@ class Calculator {
 	bool hasToExpression(const std::string &str, bool allow_empty_from = false) const;
 	bool hasToExpression(const std::string &str, bool allow_empty_from, const EvaluationOptions &eo) const;
 
+	/** Parses a "to"-expression (separated from expression using separateToExpression).
+	 *
+	 * @param to_str The "to"-expression
+	 * @param[out] evalops Updated with directives from the expression
+	 * @param[out] printops Updated with directives from the expression
+	 * @param[out] custom_base Set to non-zero if conversion to custom number base (with Calculator::setCustomOutputBase()) is requested
+	 * @param[out] binary_prefixes Set to 2 if temporary activation of binary prefixes (using Calculator::useBinaryPrefixes()) is requested, 0 for requested deactivation, and -1 otherwise
+	 * @param[out] complex_angle_form Set to true (and evalops.complex_number_form to COMPLEX_FORM_CIS) if complex angle form is requested
+	 * @param[out] do_factors Set to true (and evalops.structuring to STRUCTURING_FACTORIZE) if factorization is requested
+	 * @param[out] do_pfe Set to true if partial fraction expansion is requested
+	 * @param[out] do_calendars Set to true if calendar conversion is requested
+	 * @param[out] do_bases Set to true if expression includes "to bases"
+	 * @returns the remaining unit expression
+	 */
+	std::string parseToExpression(std::string to_str, EvaluationOptions &evalops, PrintOptions &printops, Number *custom_base = NULL, int *binary_prefixes = NULL, bool *complex_angle_form = NULL, bool *do_factors = NULL, bool *do_pfe = NULL, bool *do_calendars = NULL, bool *do_bases = NULL) const;
+
 	/// Split an expression string after and before " where ".
 	bool separateWhereExpression(std::string &str, std::string &where_str, const EvaluationOptions &eo) const;
 	bool hasWhereExpression(const std::string &str, const EvaluationOptions &eo) const;
@@ -736,6 +754,7 @@ class Calculator {
 	bool parseOperators(MathStructure *mstruct, std::string str, const ParseOptions &po = default_parse_options);
 	bool parseAdd(std::string &str, MathStructure *mstruct, const ParseOptions &po, MathOperation s, bool append = true);
 	bool parseAdd(std::string &str, MathStructure *mstruct, const ParseOptions &po);
+	void parseExpressionAndWhere(MathStructure *mstruct, MathStructure *mwhere, std::string str, std::string str_where, const ParseOptions &po);
 	//@}
 
 	/** @name Functions converting expressions between units. */
@@ -755,13 +774,12 @@ class Calculator {
 	* The converted value is evaluated.
 	*
 	* @param mstruct The value to convert.
-	* @param composite_ Unit to convert to.
+	* @param to_unit Unit to convert to.
 	* @param eo Evaluation options.
 	* @param always_convert ...
 	* @returns Converted value.
 	*/
-	MathStructure convert(const MathStructure &mstruct, Unit *to_unit, const EvaluationOptions &eo, bool always_convert, bool convert_to_mixed_units, bool transform_orig, MathStructure *parsed_struct = NULL);
-	MathStructure convert(const MathStructure &mstruct, Unit *to_unit, const EvaluationOptions &eo = default_user_evaluation_options, bool always_convert = true, bool convert_to_mixed_units = true);
+	MathStructure convert(const MathStructure &mstruct, Unit *to_unit, const EvaluationOptions &eo = default_user_evaluation_options, bool always_convert = true, bool convert_to_mixed_units = true, bool transform_orig = false, MathStructure *parsed_struct = NULL);
 	MathStructure convert(const MathStructure &mstruct, KnownVariable *to_var, const EvaluationOptions &eo = default_user_evaluation_options);
 	MathStructure convert(double value, Unit *from_unit, Unit *to_unit, const EvaluationOptions &eo = default_user_evaluation_options);
 	MathStructure convert(std::string str, Unit *from_unit, Unit *to_unit, int milliseconds, const EvaluationOptions &eo = default_user_evaluation_options);
@@ -856,21 +874,21 @@ class Calculator {
 	DecimalPrefix *getOptimalDecimalPrefix(const Number &exp10, const Number &exp, bool all_prefixes = true) const;
 	/** Returns the nearest binary prefix for a value.
 	*
-	* @param exp10 Base-2 exponent of the value.
+	* @param exp2 Base-2 exponent of the value.
 	* @param exp The exponent of the unit.
 	* @returns A prefix or NULL if no binary prefix is available.
 	*/
 	BinaryPrefix *getNearestBinaryPrefix(int exp2, int exp = 1) const;
 	/** Returns the best suited binary prefix for a value.
 	*
-	* @param exp10 Base-2 exponent of the value.
+	* @param exp2 Base-2 exponent of the value.
 	* @param exp The exponent of the unit.
 	* @returns A prefix or NULL if the unit should be left without prefix.
 	*/
 	BinaryPrefix *getOptimalBinaryPrefix(int exp2, int exp = 1) const;
 	/** Returns the best suited binary prefix for a value.
 	*
-	* @param exp10 Base-2 exponent of the value.
+	* @param exp2 Base-2 exponent of the value.
 	* @param exp The exponent of the unit.
 	* @returns A prefix or NULL if the unit should be left without prefix.
 	*/
@@ -1009,27 +1027,27 @@ class Calculator {
 	* @param name_ Variable name.
 	* @returns true if the name is valid for a variable.
 	*/
-	bool variableNameIsValid(const std::string &name_);
+	bool variableNameIsValid(const std::string &name_) const;
 	/** Tests if a name is valid for a variable.
 	*
 	* @param name_ Variable name.
 	* @returns true if the name is valid for a variable.
 	*/
-	bool variableNameIsValid(const char *name_);
+	bool variableNameIsValid(const char *name_) const;
 	bool variableNameIsValid(const char *name_, int version_numbers[3], bool is_user_defs);
 	bool variableNameIsValid(const std::string &name_, int version_numbers[3], bool is_user_defs);
-	std::string convertToValidVariableName(std::string name_);
-	bool functionNameIsValid(const std::string &name_);
-	bool functionNameIsValid(const char *name_);
+	std::string convertToValidVariableName(std::string name_) const;
+	bool functionNameIsValid(const std::string &name_) const;
+	bool functionNameIsValid(const char *name_) const;
 	bool functionNameIsValid(const char *name_, int version_numbers[3], bool is_user_defs);
 	bool functionNameIsValid(const std::string &name_, int version_numbers[3], bool is_user_defs);
-	std::string convertToValidFunctionName(std::string name_);
-	bool unitNameIsValid(const std::string &name_);
-	bool unitNameIsValid(const char *name_);
+	std::string convertToValidFunctionName(std::string name_) const;
+	bool unitNameIsValid(const std::string &name_) const;
+	bool unitNameIsValid(const char *name_) const;
 	bool unitNameIsValid(const char *name_, int version_numbers[3], bool is_user_defs);
 	bool unitNameIsValid(const std::string &name_, int version_numbers[3], bool is_user_defs);
-	bool utf8_pos_is_valid_in_name(char *pos);
-	std::string convertToValidUnitName(std::string name_);
+	bool utf8_pos_is_valid_in_name(char *pos) const;
+	std::string convertToValidUnitName(std::string name_) const;
 	/** Checks if a name is used by another object which is not allowed to have the same name.
 	*
 	* @param name Name.
@@ -1275,6 +1293,9 @@ class Calculator {
 	Unit *customAngleUnit();
 	void setCustomAngleUnit(Unit *u);
 
+	bool simplifiedPercentageUsed() const;
+	void setSimplifiedPercentageUsed(bool percentage_used = true);
+
 	/** @name Functions for localization */
 	//@{
 	/** Returns the preferred decimal point character.
@@ -1341,5 +1362,12 @@ class Calculator {
 	//@}
 
 };
+
+void print_dual(const MathStructure &mresult, const std::string &original_expression, const MathStructure &mparse, MathStructure &mexact, std::string &result_str, std::vector<std::string> &results_v, PrintOptions &po, const EvaluationOptions &evalops, AutomaticFractionFormat auto_frac, AutomaticApproximation auto_approx, bool cplx_angle = false, bool *exact_cmp = NULL, bool b_parsed = true, bool format = false, int colorize = 0, int tagtype = TAG_TYPE_HTML, int max_length = -1, bool converted = false);
+void calculate_dual_exact(MathStructure &mstruct_exact, MathStructure *mstruct, const std::string &original_expression, const MathStructure *parsed_mstruct, EvaluationOptions &evalops, AutomaticApproximation auto_approx, int msecs = 0, int max_size = 10);
+bool transform_expression_for_equals_save(std::string&, const ParseOptions&);
+MathStructure get_units_for_parsed_expression(const MathStructure *parsed_struct, Unit *to_unit, const EvaluationOptions &eo, const MathStructure *mstruct = NULL);
+bool expression_contains_save_function(const std::string&, const ParseOptions&, bool = false);
+void convert_unchanged_quantity_with_unit(const MathStructure &mp, MathStructure &mr, EvaluationOptions &eo);
 
 #endif

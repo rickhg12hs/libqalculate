@@ -22,7 +22,10 @@ using std::string;
 using std::vector;
 
 Assumptions::Assumptions() : i_type(ASSUMPTION_TYPE_NUMBER), i_sign(ASSUMPTION_SIGN_UNKNOWN), fmin(NULL), fmax(NULL), b_incl_min(true), b_incl_max(true) {}
-Assumptions::~Assumptions() {}
+Assumptions::~Assumptions() {
+	if(fmin) delete fmin;
+	if(fmax) delete fmax;
+}
 
 bool Assumptions::isPositive() {return i_sign == ASSUMPTION_SIGN_POSITIVE || (fmin && (fmin->isPositive() || (!b_incl_min && fmin->isNonNegative())));}
 bool Assumptions::isNegative() {return i_sign == ASSUMPTION_SIGN_NEGATIVE || (fmax && (fmax->isNegative() || (!b_incl_max && fmax->isNonPositive())));}
@@ -274,14 +277,17 @@ KnownVariable::KnownVariable(string cat_, string name_, const MathStructure &o, 
 KnownVariable::KnownVariable(string cat_, string name_, string expression_, string title_, bool is_local, bool is_builtin, bool is_active) : Variable(cat_, name_, title_, is_local, is_builtin, is_active) {
 	mstruct = NULL; mstruct_alt = NULL;
 	calculated_precision = -1;
+	b_expression = true;
+	sexpression = expression_;
+	remove_blank_ends(sexpression);
 	suncertainty = "";
 	b_relative_uncertainty = false;
 	sunit = "";
-	set(expression_);
 	setChanged(false);
 }
 KnownVariable::KnownVariable() : Variable() {
 	mstruct = NULL; mstruct_alt = NULL;
+	b_expression = true;
 }
 KnownVariable::KnownVariable(const KnownVariable *variable) {
 	mstruct = NULL; mstruct_alt = NULL;

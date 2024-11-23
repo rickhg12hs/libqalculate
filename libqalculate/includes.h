@@ -1,7 +1,7 @@
 /*
     Qalculate (library)
 
-    Copyright (C) 2003-2007, 2008, 2016-2021  Hanna Knutsson (hanna.knutsson@protonmail.com)
+    Copyright (C) 2003-2007, 2008, 2016-2024  Hanna Knutsson (hanna.knutsson@protonmail.com)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -27,12 +27,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
-#include <unistd.h>
+#ifndef _MSC_VER
+#	include <unistd.h>
+#endif
 #include <stdint.h>
 
-#define QALCULATE_MAJOR_VERSION (4)
-#define QALCULATE_MINOR_VERSION (8)
-#define QALCULATE_MICRO_VERSION (1)
+#define QALCULATE_MAJOR_VERSION (5)
+#define QALCULATE_MINOR_VERSION (4)
+#define QALCULATE_MICRO_VERSION (0)
 
 static std::string empty_string;
 
@@ -421,6 +423,34 @@ typedef enum {
 	TIME_ZONE_CUSTOM
 } TimeZone;
 
+typedef enum {
+	EXP_DEFAULT,
+	EXP_UPPERCASE_E,
+	EXP_LOWERCASE_E,
+	EXP_POWER_OF_10
+} ExpDisplay;
+
+typedef enum {
+	ROUNDING_HALF_AWAY_FROM_ZERO,
+	ROUNDING_HALF_TO_EVEN,
+	ROUNDING_HALF_TO_ODD,
+	ROUNDING_HALF_TOWARD_ZERO,
+	ROUNDING_HALF_UP,
+	ROUNDING_HALF_DOWN,
+	ROUNDING_HALF_RANDOM,
+	ROUNDING_TOWARD_ZERO,
+	ROUNDING_AWAY_FROM_ZERO,
+	ROUNDING_UP,
+	ROUNDING_DOWN
+} RoundingMode;
+
+enum {
+	UNICODE_SIGNS_OFF,
+	UNICODE_SIGNS_ON,
+	UNICODE_SIGNS_ONLY_UNIT_EXPONENTS,
+	UNICODE_SIGNS_WITHOUT_EXPONENTS
+};
+
 // temporary custom time zone value for truncation rounding in output
 #define TZ_TRUNCATE -21586
 // temporary custom time zone value for special duodecimal symbols in output
@@ -436,7 +466,7 @@ struct PrintOptions {
 	BaseDisplay base_display;
 	/// Use lower case for non-numeric characters for bases > 10. Default: false
 	bool lower_case_numbers;
-	/// Use lower case e for base-10 exponent (ex. 1.2e8 instead of 1.2E8). Default: false
+	/// Deprecated: use exp_mode instead
 	bool lower_case_e;
 	/// If rational numbers will be displayed with decimals, as a fraction, or something in between. Default: FRACTION_DECIMAL
 	NumberFractionFormat number_fraction_format;
@@ -468,8 +498,8 @@ struct PrintOptions {
 	bool limit_implicit_multiplication;
 	/// If it is not necessary that the displayed expression can be parsed correctly. Default: false
 	bool allow_non_usable;
-	/// If unicode signs can be displayed. Default: false
-	bool use_unicode_signs;
+	/// If unicode signs can be displayed. Allowed values are true (UNICODE_SIGNS_ON), false (UNICODE_SIGNS_OFF), or one of the options which limits use of Unicode exponents for non-HTML output (UNICODE_SIGNS_ONLY_UNIT_EXPONENTS and UNICODE_SIGNS_WITHOUT_EXPONENTS). Default: UNICODE_SIGNS_OFF
+	int use_unicode_signs;
 	/// Sign used for display of multiplication. Default: MULTIPLICATION_SIGN_DOT
 	MultiplicationSign multiplication_sign;
 	/// Sign used for display of division. Default: DIVISION_SIGN_DIVISION_SLASH
@@ -482,13 +512,13 @@ struct PrintOptions {
 	bool halfexp_to_sqrt;
 	/// Minimum number of decimals to display for numbers. Default: 0
 	int min_decimals;
-	/// Maximum number of decimals to display for numbers. A negative value disables the limit. Default: -1
+	/// Maximum number of decimals to display for numbers. Disables the limit of set to -1. Default: -1
 	int max_decimals;
 	/// Enable use of min_decimals. False is equivalent to a min_decimals value of zero. Default: true
 	bool use_min_decimals;
-	/// Enable use of max_decimals. False is equivalent to a negative max_decimals value. Default: true
+	/// Enable use of max_decimals. False is equivalent to a max_decimals value of -1. Default: true
 	bool use_max_decimals;
-	/// If true round halfway numbers to nearest even number, otherwise round upwards. Default: false
+	/// Deprecated: use rounding
 	bool round_halfway_to_even;
 	/// Multiply numerator and denominator to get integers (ex. (6x+y)/2z instead of (3x+0.5y)/z). Default: true
 	bool improve_division_multipliers;
@@ -536,8 +566,15 @@ struct PrintOptions {
 	bool twos_complement;
 	/// Negative hexadecimal numbers uses two's complement representation. All hexadecimal numbers starting with 8 or higher are negative. Default: false
 	bool hexadecimal_twos_complement;
-	/// Number of bits used for binary numbers. Set to 0 for automatic. Default: 0
+	/// Number of bits used for binary and hexadecimal numbers. Set to 0 for automatic. Default: 0
 	unsigned int binary_bits;
+	/// Specifies how numbers using scientific notation are displayed. Default: EXP_DEFAULT
+	ExpDisplay exp_display;
+	/// Show special duodecimal symbols in output, instead of A and B. Default: false
+	bool duodecimal_symbols;
+	/// Specifies rounding method used in output. Default: ROUNDING_HALF_AWAY_FROM_ZERO
+	RoundingMode rounding;
+
 	PrintOptions();
 	/// Returns the comma sign used (default sign or comma_sign)
 	const std::string &comma() const;
@@ -688,10 +725,12 @@ struct ParseOptions {
 	DataSet *default_dataset;
 	/// Parsing mode. Default: PARSING_MODE_ADAPTIVE
 	ParsingMode parsing_mode;
-	/// Negative binary numbers uses two's complement representation. All binary numbers starting with 1 are assumed to be negative. Default: false
+	/// Negative binary numbers uses two's complement representation. All binary numbers starting with 1 are assumed to be negative, unless binary_bits is set. Default: false
 	bool twos_complement;
-	/// Negative hexadecimal numbers uses two's complement representation. All hexadecimal numbers starting with 8 or higher are assumed to be negative. Default: false
+	/// Negative hexadecimal numbers uses two's complement representation. All hexadecimal numbers starting with 8 or higher are assumed to be negative, unless binary_bits is set. Default: false
 	bool hexadecimal_twos_complement;
+	/// Number of bits used for binary and hexadecimal numbers. Set to 0 for automatic. Default: 0
+	unsigned int binary_bits;
 
 	ParseOptions();
 

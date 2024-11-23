@@ -213,14 +213,16 @@ void lcmcoeff(const MathStructure &e, const Number &l, Number &nlcm);
 void lcmcoeff(const MathStructure &e, const Number &l, Number &nlcm) {
 	if(e.isNumber() && e.number().isRational()) {
 		nlcm = e.number().denominator();
-		nlcm.lcm(l);
+		if(l.isInteger()) nlcm.lcm(l);
+		else nlcm.multiply(l);
 	} else if(e.isAddition()) {
 		nlcm.set(1, 1, 0);
 		for(size_t i = 0; i < e.size(); i++) {
 			Number c(nlcm);
 			lcmcoeff(e[i], c, nlcm);
 		}
-		nlcm.lcm(l);
+		if(l.isInteger()) nlcm.lcm(l);
+		else nlcm.multiply(l);
 	} else if(e.isMultiplication()) {
 		nlcm.set(1, 1, 0);
 		for(size_t i = 0; i < e.size(); i++) {
@@ -228,7 +230,8 @@ void lcmcoeff(const MathStructure &e, const Number &l, Number &nlcm) {
 			lcmcoeff(e[i], nr_one, c);
 			nlcm *= c;
 		}
-		nlcm.lcm(l);
+		if(l.isInteger()) nlcm.lcm(l);
+		else nlcm.multiply(l);
 	} else if(e.isPower()) {
 		if(IS_A_SYMBOL(e[0]) || e[0].isUnit()) {
 			nlcm = l;
@@ -443,7 +446,33 @@ bool sqrfree(MathStructure &mpoly, const vector<MathStructure> &symbols, const E
 }
 
 bool MathStructure::integerFactorize() {
-	if(!isNumber()) return false;
+	if(isVector()) {
+		for(size_t i = 0; i < SIZE; i++) {
+			if(CHILD(i).isVector()) {
+				for(size_t i2 = 0; i2 < CHILD(i).size(); i2++) {
+					if(!CHILD(i)[i2].isNumber()) return false;
+				}
+			} else if(!CHILD(i).isNumber()) {
+				return false;
+			}
+		}
+		bool b = false;
+		for(size_t i = 0; i < SIZE; i++) {
+			if(CHILD(i).integerFactorize()) b = true;
+		}
+		return b;
+	}
+	if(!isNumber() || !o_number.isRational()) return false;
+	if(!o_number.isInteger()) {
+		MathStructure mnum(o_number.numerator()), mden(o_number.denominator());
+		if(mnum.integerFactorize() && mden.integerFactorize()) {
+			if(!mnum.isMultiplication() && !mden.isMultiplication()) return true;
+			set(mnum);
+			divide(mden);
+			return true;
+		}
+		return false;
+	}
 	vector<Number> factors;
 	if(!o_number.factorize(factors)) return false;
 	if(factors.size() <= 1) return true;

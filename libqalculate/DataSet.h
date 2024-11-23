@@ -40,6 +40,7 @@ class DataObject {
 	* @param parent_set Data set that the object will belong to.
 	*/
 	DataObject(DataSet *parent_set);
+	~DataObject();
 
 	/** Unset (erase value) a property.
 	*
@@ -49,14 +50,14 @@ class DataObject {
 	/** Set value for a property.
 	*
 	* @param property Property to set (must belong to parent data set).
-	* @param s_vale Value for the property.
+	* @param s_value Value for the property.
 	* @param is_approximate If the value is approximate. 1 for approximate, 0 for exact, -1 for property default.
 	*/
 	void setProperty(DataProperty *property, std::string s_value, int is_approximate = -1);
 	/** Set an untranslated value for a key property. Used when a text value is translated, but the original value still is needed as a reference key.
 	*
 	* @param property Property to set (must belong to parent data set).
-	* @param s_vale Value for the property.
+	* @param s_value Value for the property.
 	*/
 	void setNonlocalizedKeyProperty(DataProperty *property, std::string s_value);
 
@@ -142,6 +143,7 @@ class DataProperty {
 	*/
 	DataProperty(DataSet *parent_set, std::string s_name = "", std::string s_title = "", std::string s_description = "");
 	DataProperty(const DataProperty &dp);
+	~DataProperty();
 
 	void set(const DataProperty &dp);
 	void setName(std::string s_name, bool is_ref = false);
@@ -207,6 +209,7 @@ class DataSet : public MathFunction {
 
   	DataSet(std::string s_category = "", std::string s_name = "", std::string s_default_file = "", std::string s_title = "", std::string s_description = "", bool is_local = true);
 	DataSet(const DataSet *o);
+	~DataSet();
 
 	ExpressionItem *copy() const;
 	void set(const ExpressionItem *item);

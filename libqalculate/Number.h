@@ -80,11 +80,11 @@ class Number {
  		*/
 		Number(std::string number, const ParseOptions &po = default_parse_options);
 		/**
-		* Constructs a rational number.
+		* Constructs a rational number (numerator/denominator * 10^exp_10).
 		*
-		* @param numerator
-		* @param denominator
-		* @param exp_10
+		* @param numerator Numerator of rational number
+		* @param denominator Denominator of rational number
+		* @param exp_10 Base-10 exponent
  		*/
 		Number(long int numerator, long int denominator = 1, long int exp_10 = 0);
 		/**
@@ -263,6 +263,8 @@ class Number {
 		bool bitXor(const Number &o);
 		bool bitNot();
 		bool bitCmp(unsigned int bits);
+		bool bitSet(unsigned long bit, bool set = true);
+		int bitGet(unsigned long bit) const;
 		bool bitEqv(const Number &o);
 		bool shiftLeft(const Number &o);
 		bool shiftRight(const Number &o);
@@ -426,6 +428,7 @@ class Number {
 		bool isqrt();
 		bool isPerfectSquare() const;
 		bool round(bool halfway_to_even = true);
+		bool round(RoundingMode mode);
 		bool floor();
 		bool ceil();
 		bool trunc();
